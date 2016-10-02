@@ -1,0 +1,33 @@
+@import services.RelationshipValueEstimator
+@(user: MaterializedEntity[User], applicationId: String, person: MaterializedEntity[Person], relations: Seq[(MaterializedEntity[Person], RelationshipValueEstimator.Score)])
+
+@layout(title = "Home", styles = Seq("index.css"), scripts = Seq("social.js")) {
+    <div class="Social">
+        <div class="Social_top">
+            @(person.entity.profile.photo.map(photo => Html("<img src=\"" + photo + "\"/>")))
+            Welcome, @(person.entity.profile.name)!
+        </div>
+
+        <div class="Social__friends">
+            @(relations match {
+                case Nil =>
+                    <h3>We know nothing about your friends. Invite someone to install application first!</h3>
+                case xs: Seq[MaterializedEntity[Person]] =>
+                    Html("<ul>" + xs.map(x => "<li>" + x._1.entity.profile.name + ", score = " + x._2.totalValue + "</li>").mkString("\n") + "</ul>")
+            })
+
+            <button class="Social__invite">Invite someone now!</button>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        window.fbAsyncInit = function() {
+            FB.init({
+                appId      : @(applicationId),
+                xfbml      : true,
+                version    : 'v2.7'
+            });
+            FB.AppEvents.logPageView();
+        }
+    </script>
+}

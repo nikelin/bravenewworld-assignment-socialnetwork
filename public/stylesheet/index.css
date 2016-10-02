@@ -1,0 +1,21 @@
+.LoginPanel {
+    text-align: center;
+    border: 1px #000 solid;
+    width: 50%;
+    margin: 0 auto;
+}
+
+.LoginPanel__systems {
+    padding: 50px 0;
+}
+
+.LoginPanel__system {
+    width: 50px;
+    height: 50px;
+    margin: 20px;
+}
+
+.LoginPanel__system img {
+    width: 50px;
+    height: 50px;
+}

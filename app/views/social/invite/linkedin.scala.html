@@ -1,0 +1,8 @@
+@(user: MaterializedEntity[User], applicationId: String, person: MaterializedEntity[Person], relations: Seq[MaterializedEntity[Person]])
+
+@layout(title = "Home", styles = Seq("index.css"), scripts = Seq("social.js")) {
+    <div class="Social_top">
+        @(person.entity.profile.photo.map(photo => Html("<img src=\"" + photo + "\"/>")))
+        Welcome, @(person.entity.profile.name)!
+    </div>
+}

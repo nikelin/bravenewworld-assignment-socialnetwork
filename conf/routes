@@ -1,0 +1,13 @@
+GET    /oauth/auth/:system               @controllers.OAuth2Controller.authenticate(system)
+GET    /oauth/callback                   @controllers.OAuth2Controller.callback(appId:String, code: String)
+GET    /oauth/testCallback               @controllers.OAuth2Controller.testCallback(appId:String, accessTokenValue: String)
+
+GET    /social                           @controllers.SocialRelationsController.home()
+
+GET    /                                 @controllers.AppController.index()
+
+# Assets
+
+GET  /scripts/*file                      controllers.Assets.at(path="/public/scripts", file)
+GET  /images/*file                       controllers.Assets.at(path="/public/images", file)
+GET  /stylesheet/*file                   controllers.Assets.at(path="/public/stylesheet", file)

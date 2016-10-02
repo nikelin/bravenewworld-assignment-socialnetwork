@@ -1,0 +1,21 @@
+@(title: String, styles: Seq[String] = Seq.empty, scripts: Seq[String] = Seq.empty)(content: Html)
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>VIDEQ:RELS - @title</title>
+
+        <script type="text/javascript" src="/scripts/fb.js"></script>
+        <script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+
+        @Html(
+            scripts.map(script => "<script type=\"text/javascript\" src=\"/scripts/" + script + "\"></script>").mkString("\n")
+        )
+
+        @Html(
+            styles.map(style => "<link rel=\"stylesheet\" media=\"all\" href=\"/stylesheet/" + style + "\"/>").mkString("\n")
+        )
+    </head>
+    <body>
+        <section class="content">@content</section>
+    </body>
+</html>
