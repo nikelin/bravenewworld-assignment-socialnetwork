@@ -20,8 +20,6 @@ class DummyDataAccessManager extends DataAccessManager {
 
   private final val personToPersonIndex: mutable.Map[Id[Person], Seq[Id[Person]]] = new mutable.HashMap()
   private final val userToPersonsIndex: mutable.Map[Id[User], Seq[Id[Person]]] = new mutable.HashMap()
-  private final val userToSocialSiteIndex: mutable.Map[Id[User], Seq[Id[UserSocialSite]]] = new mutable.HashMap()
-  private final val socialSiteToUserIndex: mutable.Map[Id[UserSocialSite], Id[User]] = new mutable.HashMap()
 
   override def createSession(accessToken: OAuth2Service.AccessToken, userId: Id[User])(implicit ec: ExecutionContext): Future[Id[UserSession]] =
     Future {
