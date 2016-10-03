@@ -4,6 +4,7 @@ import javax.inject.{Inject, Singleton}
 
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
+import models.ServiceType
 import play.api.Application
 import play.api.http.{HeaderNames, MimeTypes}
 import play.api.libs.ws.{WS, WSClient}
@@ -34,13 +35,28 @@ class OAuth2Service @Inject() (ws: WSClient, configuration: Config) extends Lazy
   }
 
   def getToken(appId: String, code: String)(implicit ec: ExecutionContext): Future[OAuth2Service.AccessToken] = {
-    val queryString = s"code=$code&client_id=${oauthAuthId(appId)}&client_secret=${oauthAuthSecret(appId)}&redirect_uri=${oauthRedirectUrl(appId)}&grant_type=authorization_code"
-    val tokenResponse =
+    val tokenResponse = appId match {
+      case ServiceType.Instagram.asString =>
+        val queryString = s"code=$code&client_id=${oauthAuthId(appId)}&client_secret=${oauthAuthSecret(appId)}&redirect_uri=${oauthRedirectUrl(appId)}&grant_type=authorization_code"
         ws.url(oauthAccessTokenUrl(appId))
           .withHeaders(
             HeaderNames.CONTENT_TYPE -> MimeTypes.FORM
           )
-        .post(queryString)
+          .post(queryString)
+      case _ =>
+        ws.url(oauthAccessTokenUrl(appId))
+          .withQueryString(
+            "code" -> code,
+            "client_id" -> oauthAuthId(appId),
+            "client_secret" -> oauthAuthSecret(appId),
+            "redirect_uri" -> oauthRedirectUrl(appId),
+            "grant_type" -> "authorization_code"
+          )
+          .withHeaders(
+            HeaderNames.ACCEPT -> MimeTypes.JSON
+          )
+          .post(Results.EmptyContent())
+    }
 
     tokenResponse.flatMap { response =>
       logger.info("Response", response.body)
