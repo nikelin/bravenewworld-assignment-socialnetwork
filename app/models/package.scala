@@ -44,8 +44,6 @@ package object models {
 
   case class UserSession(user: Id[User], accessToken: String, created: ZonedDateTime) extends DomainEntity
 
-  case class UserSocialSite(userProfile: Person, appId: String) extends DomainEntity
-
   case class User(createdOn: ZonedDateTime) extends DomainEntity
 
   case class Person(internalId: UserAccountId, profile: UserProfile) extends DomainEntity
@@ -61,12 +59,8 @@ package object models {
       type Value = PersonAttributeValue.Photo
     }
 
-    case object Name extends PersonAttributeType {
+    case object Text extends PersonAttributeType {
       type Value = PersonAttributeValue.Text
-    }
-
-    case object Connection extends PersonAttributeType {
-      type Value = PersonAttributeValue.Connection
     }
 
     case object Interest extends PersonAttributeType {
@@ -81,12 +75,11 @@ package object models {
   sealed trait PersonAttributeValue
   object PersonAttributeValue {
     case class Photo(value: String) extends PersonAttributeValue
-    case class Text(value: String) extends PersonAttributeValue
-    case class Connection(source: Id[UserSocialSite], person: Id[Person]) extends PersonAttributeValue
+    case class Text(name: String, value: String) extends PersonAttributeValue
     case class Interest(value: DictionaryObject) extends PersonAttributeValue
     case class WorkExperience(company: Id[DictionaryObject], dateStart: ZonedDateTime, dateEnd: ZonedDateTime)
       extends PersonAttributeValue
-    case class FamilyMember(person: Id[Person]) extends PersonAttributeValue
+    case class Relative(person: Id[Person]) extends PersonAttributeValue
   }
 
   case class DictionaryObject(tpe: String, data: String) extends DomainEntity
