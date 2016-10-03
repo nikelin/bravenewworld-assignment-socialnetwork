@@ -8,6 +8,19 @@ Social application which provides user with scoring tool for his social connecti
 
 Application build on top of **Playframework!** written in **Scala 2.11.8**.
 
+## Getting started
+
+Project uses SBT (Simple Build Tool) to automate its building process. 
+
+To build project from sources, you need to download and install SBT binary distributive: 
+http://www.scala-sbt.org/download.html
+
+When you have SBT ready, just run these command in order to produce project binary distributive:
+
+`> sbt dist`
+
+Build artifact will be places at `target/universal/bnw-backend-1.0.zip`.
+
 ## Architecture
 
 ### Playframework! basics

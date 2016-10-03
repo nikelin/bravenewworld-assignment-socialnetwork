@@ -3,20 +3,20 @@ import java.time.ZonedDateTime
 package object models {
 
   sealed trait ServiceType {
-    def asString: String
+    val asString: String
   }
 
   object ServiceType {
     case object Facebook extends ServiceType {
-      override def asString = "facebook"
+      override val asString = "facebook"
     }
 
     case object Linkedin extends ServiceType {
-      override def asString = "linkedin"
+      override val asString = "linkedin"
     }
 
     case object Instagram extends ServiceType {
-      override def asString = "instagram"
+      override val asString = "instagram"
     }
   }
 
