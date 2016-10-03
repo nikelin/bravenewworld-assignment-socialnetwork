@@ -12,7 +12,7 @@
             @(relations match {
                 case Nil =>
                     <h3>We know nothing about your friends. Invite someone to install application first!</h3>
-                case xs: Seq[MaterializedEntity[Person]] =>
+                case xs: Seq[(MaterializedEntity[Person], RelationshipValueEstimator.Score)] =>
                     Html("<ul>" + xs.map(x => "<li>" + x._1.entity.profile.name + ", score = " + x._2.totalValue + "</li>").mkString("\n") + "</ul>")
             })
 

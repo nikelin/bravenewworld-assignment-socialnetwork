@@ -8,20 +8,31 @@ import services.RelationshipValueEstimator
 import services.RelationshipValueEstimator.{Score, ScoreFactor}
 
 import scala.collection.mutable
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
+
+object RelationshipValueEstimatorImpl {
+
+  final val defaultWeightFunction: RelationshipValueEstimator.WeightFunction = {
+    case ScoreFactor.ShareNetwork(count) => count
+    case ScoreFactor.ShareInterests(count) => count * 0.15
+    case _ => 0
+  }
+
+}
 
 @Singleton
 class RelationshipValueEstimatorImpl @Inject() (dataAccessManager: DataAccessManager)
   extends RelationshipValueEstimator {
   import RelationshipValueEstimator._
 
-  private final val weights: mutable.ListBuffer[RelationshipValueEstimator.WeightFunction] = mutable.ListBuffer()
+  private final val weights: mutable.ListBuffer[RelationshipValueEstimator.WeightFunction] =
+    mutable.ListBuffer(RelationshipValueEstimatorImpl.defaultWeightFunction)
 
   override def defineWeightFunction(weightFunction: RelationshipValueEstimator.WeightFunction): Unit = {
     weights += weightFunction
   }
 
-  override def process(person: Id[Person], relations: Seq[Id[Person]]): Future[Seq[(Id[Person], Score)]] = {
+  override def process(person: Id[Person], relations: Seq[Id[Person]])(implicit ec: ExecutionContext): Future[Seq[(Id[Person], Score)]] = {
     for {
       personNetwork <- dataAccessManager.findRelationsByPersonId(person)
       personAttributes <- dataAccessManager.findPersonAttributesByPersonId(person)

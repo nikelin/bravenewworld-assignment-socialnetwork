@@ -15,7 +15,7 @@ import scala.concurrent.{ExecutionContext, Future}
 class DummyDataAccessManager extends DataAccessManager {
   private final val users: mutable.ListBuffer[MaterializedEntity[User]] = mutable.ListBuffer()
   private final val persons: mutable.ListBuffer[MaterializedEntity[Person]] = mutable.ListBuffer()
-
+  private final val personAttributes: mutable.Map[Id[Person], Seq[PersonAttribute]] = mutable.Map()
   private final val sessions: mutable.ListBuffer[MaterializedEntity[UserSession]] = mutable.ListBuffer()
 
   private final val personToPersonIndex: mutable.Map[Id[Person], Seq[Id[Person]]] = new mutable.HashMap()
@@ -73,7 +73,7 @@ class DummyDataAccessManager extends DataAccessManager {
     Future {
       synchronized {
         val currentState = personToPersonIndex.getOrElseUpdate(left, Seq.empty)
-        if ( !currentState.contains(right) ) {
+        if ( currentState.count(_.value == right.value) == 0 ) {
           personToPersonIndex.put(left, personToPersonIndex.getOrElseUpdate(left, Seq.empty) :+ right)
         }
       }
@@ -134,10 +134,20 @@ class DummyDataAccessManager extends DataAccessManager {
   override def createPerson(person: Person)(implicit ec: ExecutionContext): Future[Id[Person]] = {
     Future {
       synchronized {
-        val record = materialize(person)
-        this.persons += record
-        record.id
+        this.persons.find(_.entity.internalId == person.internalId)
+          .map(_.id)
+          .getOrElse {
+            val record = materialize(person)
+            this.persons += record
+            record.id
+          }
       }
+    }
+  }
+
+  override def findPersonAttributesByPersonId(personId: Id[Person])(implicit ec: ExecutionContext): Future[Seq[PersonAttribute]] = {
+    Future {
+      personAttributes.getOrElse(personId, Seq.empty)
     }
   }
 

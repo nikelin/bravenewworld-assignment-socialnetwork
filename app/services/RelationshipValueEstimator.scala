@@ -2,7 +2,7 @@ package services
 
 import models.{Id, MaterializedEntity, Person}
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 object RelationshipValueEstimator {
 
@@ -19,13 +19,13 @@ object RelationshipValueEstimator {
 
   case class Score(factor: Seq[(ScoreFactor, Double)], totalValue: Double)
 
-  type WeightFunction = ScoreFactor => Double
+  type WeightFunction = PartialFunction[ScoreFactor, Double]
 }
 
 trait RelationshipValueEstimator {
 
   def defineWeightFunction(weightFunction: RelationshipValueEstimator.WeightFunction): Unit
 
-  def process(person: Id[Person], relations: Seq[Id[Person]]): Future[Seq[(Id[Person], RelationshipValueEstimator.Score)]]
+  def process(person: Id[Person], relations: Seq[Id[Person]])(implicit ec: ExecutionContext): Future[Seq[(Id[Person], RelationshipValueEstimator.Score)]]
 
 }
