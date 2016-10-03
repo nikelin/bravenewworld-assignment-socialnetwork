@@ -23,7 +23,7 @@ class OAuth2Service @Inject() (ws: WSClient, configuration: Config) extends Lazy
   def oauthAuthId(appId: String): String = configuration.getString(s"oauth.$appId.appId")
   def oauthAuthSecret(appId: String): String = configuration.getString(s"oauth.$appId.secretKey")
   def oauthAccessTokenUrl(appId: String): String = configuration.getString(s"oauth.$appId.accessTokenUrl")
-  def oauthRedirectUrl(appId: String): String = configuration.getString(s"oauth.$appId.redirectUrl")
+  def oauthRedirectUrl(appId: String): String = configuration.getString("serverAddress") + configuration.getString(s"oauth.$appId.redirectUrl")
 
   def getAuthorizationUrl(appId: String): String = {
     configuration.getString(s"oauth.$appId.authorizeUrl").format(oauthAuthId(appId), oauthRedirectUrl(appId))
@@ -34,16 +34,13 @@ class OAuth2Service @Inject() (ws: WSClient, configuration: Config) extends Lazy
   }
 
   def getToken(appId: String, code: String)(implicit ec: ExecutionContext): Future[OAuth2Service.AccessToken] = {
+    val queryString = s"code=$code&client_id=${oauthAuthId(appId)}&client_secret=${oauthAuthSecret(appId)}&redirect_uri=${oauthRedirectUrl(appId)}&grant_type=authorization_code"
     val tokenResponse =
         ws.url(oauthAccessTokenUrl(appId))
-          .withQueryString(
-            "redirect_uri" -> oauthRedirectUrl(appId),
-            "client_id" -> oauthAuthId(appId),
-            "client_secret" -> oauthAuthSecret(appId),
-            "code" -> code
+          .withHeaders(
+            HeaderNames.CONTENT_TYPE -> MimeTypes.FORM
           )
-          .withHeaders(HeaderNames.ACCEPT -> MimeTypes.JSON)
-          .post(Results.EmptyContent())
+        .post(queryString)
 
     tokenResponse.flatMap { response =>
       logger.info("Response", response.body)

@@ -5,7 +5,7 @@
     <div class="Social">
         <div class="Social_top">
             @(person.entity.profile.photo.map(photo => Html("<img src=\"" + photo + "\"/>")))
-            Welcome, @(person.entity.profile.name)!
+            Welcome, @(person.entity.profile.name)! @(person.entity.internalId.serviceType.asString)
         </div>
 
         <div class="Social__friends">
@@ -21,6 +21,18 @@
     </div>
 
     <script type="text/javascript">
+        $(window).ready(function() {
+            $(".Social__invite").click(function (event) {
+                @(person.entity.internalId.serviceType match {
+                    case ServiceType.Facebook =>
+                        JavaScript("Social.facebookUi()")
+                    case ServiceType.Linkedin =>
+                        JavaScript("Social.linkedinUi()");
+                    case _ =>
+                })
+            })
+        });
+
         window.fbAsyncInit = function() {
             FB.init({
                 appId      : @(applicationId),
