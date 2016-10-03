@@ -26,7 +26,7 @@ class FacebookSocialServiceConnector @Inject() (config: Config, wsClient: WSClie
       case FacebookId(accountId) =>
         fetchPagedResult(
           JsArray(),
-          wsClient.url(s"${endpointUrl(config)}/v2.7/$accountId/friends")
+          wsClient.url(s"${endpointUrl(config)}/v2.7/me/friends")
             .withQueryString(
               "fields" -> "name,id,photo",
               "client_id" -> oauthClientId(config),

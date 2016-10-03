@@ -9,6 +9,7 @@ import services.OAuth2Service.AccessToken
 import services.SocialServiceConnectors
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NonFatal
 
 object SchedulerActor {
 
@@ -30,6 +31,10 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
 
   implicit val ec: ExecutionContext = context.dispatcher
 
+  override def postStop(): Unit = {
+    logger.info("Post stop")
+  }
+
   override def preStart(): Unit = {
     logger.info("Pre start")
   }
@@ -37,9 +42,12 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
   override def receive: Receive = {
     case Request.UpdateNetwork =>
       dataAccessManager.findAllUsers() flatMap { users =>
+        println(s"Updating ${users.length} users")
+
         for {
           userAndPersons <- Future.sequence(users map { user =>
             dataAccessManager.findPersonsByUserId(user.id) map { persons =>
+              println(s"${persons.length} persons resolved for user")
               (user, persons)
             }
           })
@@ -54,8 +62,11 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
             case (user, person, Some(connector)) =>
               for {
                 sessions <- dataAccessManager.findSessionsByUserId(user.id)
-                latestSession <- Future(sessions.sortBy(_.entity.created.toEpochSecond).head)
-                friends <- connector.requestFriendsList(AccessToken(latestSession.entity.accessToken), person.entity.internalId)
+                _ = println(s"Session ${sessions} resolved for user")
+                latestSession <- Future(sessions.sortBy(_.entity.created.toEpochSecond).headOption)
+                friends <- if(latestSession.nonEmpty)
+                  connector.requestFriendsList(AccessToken(latestSession.head.entity.accessToken), person.entity.internalId)
+                  else Future(Seq())
               } yield (person, friends)
           })
 
@@ -67,6 +78,9 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
             })
           })
         } yield println(s"${relations.flatten.size} nodes updated/created")
+      } recover {
+        case e if NonFatal(e) =>
+          e.printStackTrace()
       }
     case e: Any =>
       logger.error(s"Unknown request received by SchedulerActor: $e")

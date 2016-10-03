@@ -47,7 +47,8 @@ class OAuth2Controller @Inject()(oauthService: OAuth2Service,
         (for {
           accessToken <- oauthService.getToken(appId, code)
           person <- socialServiceConnector.requestUserProfile(accessToken)
-          userId <- dataAccessManager.addUser(User(ZonedDateTime.now), person)
+          userOpt <- dataAccessManager.findUserByPersonInternalId(person.internalId)
+          userId <- userOpt.map(u => dataAccessManager.linkPerson(u.id, person).map(_ => u.id) ).getOrElse(dataAccessManager.addUser(User(ZonedDateTime.now), person))
           sessionId <- dataAccessManager.createSession(accessToken, userId)
         } yield {
           Redirect(routes.SocialRelationsController.home()).withSession(

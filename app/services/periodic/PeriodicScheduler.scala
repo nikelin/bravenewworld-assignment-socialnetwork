@@ -16,8 +16,6 @@ class PeriodicScheduler @Inject() (system: ActorSystem, @Named("scheduler-actor"
 
   implicit val ec = system.dispatcher
 
-  logger.info("Period scheduler initialized")
-  // update persons friends list
   system.scheduler.schedule(0.microseconds, 5.seconds, schedulerActor, SchedulerActor.Request.UpdateNetwork)
 
   // update persons interests
