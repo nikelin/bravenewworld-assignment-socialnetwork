@@ -4,7 +4,7 @@
 <table>
     <thead>
         <tr>
-            <th></th>
+            <th>Photo</th>
             <th>Friend</th>
             <th>Social Rank</th>
         </tr>
@@ -12,6 +12,11 @@
     <tbody>
         @(xs map { x =>
             views.html.social.friendRow(x._1, x._2, x._3)
+        })
+        @(if(xs.isEmpty) {
+            Html("""<tr>
+                <td colspan="3" style="text-align: center;">No results here. Usually, it might take us up to few minutes to finish processing your data.</td>
+            </tr>""")
         })
     </tbody>
 </table>

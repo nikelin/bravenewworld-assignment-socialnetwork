@@ -5,6 +5,7 @@ GET    /oauth/testCallback               @controllers.OAuth2Controller.testCallb
 GET    /social                           @controllers.SocialRelationsController.home()
 
 GET    /                                 @controllers.AppController.index()
+GET    /logout                           @controllers.AppController.logout()
 
 # Assets
 
