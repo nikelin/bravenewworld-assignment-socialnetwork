@@ -1,13 +1,12 @@
-package services
+package services.oauth
 
 import javax.inject.{Inject, Singleton}
 
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import models.ServiceType
-import play.api.Application
 import play.api.http.{HeaderNames, MimeTypes}
-import play.api.libs.ws.{WS, WSClient}
+import play.api.libs.ws.WSClient
 import play.api.mvc.Results
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -59,7 +58,6 @@ class OAuth2Service @Inject() (ws: WSClient, configuration: Config) extends Lazy
     }
 
     tokenResponse.flatMap { response =>
-      logger.info("Response", response.body)
       (response.json \ "access_token")
         .asOpt[String]
         .fold(Future.failed[OAuth2Service.AccessToken](new IllegalStateException("failed"))) { accessToken =>

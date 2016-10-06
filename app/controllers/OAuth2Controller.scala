@@ -3,17 +3,18 @@ package controllers
 import java.time.ZonedDateTime
 import javax.inject.Inject
 
+import com.typesafe.scalalogging.LazyLogging
 import dal.DataAccessManager
 import models.{ServiceType, User}
 import play.api.mvc.{Action, AnyContent, Controller}
-import services.{OAuth2Service, SocialServiceConnectors}
+import services.oauth.{OAuth2Service, SocialServiceConnectors}
 
 import scala.concurrent.{ExecutionContext, Future}
 
 class OAuth2Controller @Inject()(oauthService: OAuth2Service,
                                  socialServiceConnectors: SocialServiceConnectors,
                                  dataAccessManager: DataAccessManager)
-  extends Controller {
+  extends Controller with LazyLogging {
 
   implicit val ec: ExecutionContext = play.api.libs.concurrent.Execution.Implicits.defaultContext
 
@@ -28,8 +29,9 @@ class OAuth2Controller @Inject()(oauthService: OAuth2Service,
 
         (for {
           person <- socialServiceConnector.requestUserProfile(accessToken)
-          userId <- dataAccessManager.addUser(User(ZonedDateTime.now), person)
-          sessionId <- dataAccessManager.createSession(accessToken, userId)
+          userAndPersonId <- dataAccessManager.addUser(User(ZonedDateTime.now), person.person)
+          _ <- dataAccessManager.updatePersonAttributes(userAndPersonId._2, person.attribute)
+          sessionId <- dataAccessManager.createSession(accessToken, userAndPersonId._1)
         } yield {
           Redirect(routes.SocialRelationsController.home()).withSession(
             UserSessionId -> sessionId.value
@@ -46,16 +48,20 @@ class OAuth2Controller @Inject()(oauthService: OAuth2Service,
       case Some(socialServiceConnector) =>
         (for {
           accessToken <- oauthService.getToken(appId, code)
-          person <- socialServiceConnector.requestUserProfile(accessToken)
-          userOpt <- dataAccessManager.findUserByPersonInternalId(person.internalId)
-          userId <- userOpt.map(u => dataAccessManager.linkPerson(u.id, person).map(_ => u.id) ).getOrElse(dataAccessManager.addUser(User(ZonedDateTime.now), person))
-          sessionId <- dataAccessManager.createSession(accessToken, userId)
+          personWithAttributes <- socialServiceConnector.requestUserProfile(accessToken)
+          userOpt <- dataAccessManager.findUserByPersonInternalId(personWithAttributes.person.internalId)
+          userAndPersonId <- userOpt.map(u => dataAccessManager.linkPerson(u.id, personWithAttributes.person) map {p => (u.id, p)})
+            .getOrElse(dataAccessManager.addUser(User(ZonedDateTime.now), personWithAttributes.person))
+          _ <- dataAccessManager.updatePersonAttributes(userAndPersonId._2, personWithAttributes.attribute)
+          sessionId <- dataAccessManager.createSession(accessToken, userAndPersonId._1)
         } yield {
           Redirect(routes.SocialRelationsController.home()).withSession(
             UserSessionId -> sessionId.value
           )
         }).recover {
-          case e => Unauthorized(e.getMessage)
+          case e =>
+            logger.error(e.getMessage, e)
+            Unauthorized(e.getMessage)
         }
       case None => Future(NotImplemented(s"Platform '$appId' is not supported"))
     }

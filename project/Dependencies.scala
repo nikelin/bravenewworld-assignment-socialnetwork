@@ -12,9 +12,19 @@ object Dependencies {
     val scalaLogging = "3.1.0"
     val upickleVersion = "0.4.0"
     val jcodec = "0.1.9"
+    val seleniumVersion = "2.53.0"
+    val jWebDriverVersion = "0.16.4"
+    val gson = "2.6.2"
+    val commonsPool = "2.4.2"
   }
 
   lazy val server = Def.setting(Seq(
+    "org.apache.commons" % "commons-pool2" % Versions.commonsPool % Compile,
+    "org.seleniumhq.selenium" % "selenium-htmlunit-driver" % "2.52.0" % Compile,
+    "com.google.code.gson" % "gson" % Versions.gson % Compile,
+    "com.machinepublishers" % "jbrowserdriver" % Versions.jWebDriverVersion % Compile,
+    "org.seleniumhq.selenium" % "selenium-server" % Versions.seleniumVersion % Compile,
+    "org.seleniumhq.selenium" % "selenium-java" % Versions.seleniumVersion % Compile,
     "org.jcodec" % "jcodec-javase" % Versions.jcodec % Compile,
     "com.lihaoyi" %% "upickle" % Versions.upickleVersion % Compile,
     "com.typesafe.akka" %% "akka-actor" % Versions.akka % Compile,

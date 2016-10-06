@@ -43,7 +43,7 @@ class RelationshipValueEstimatorImpl @Inject() (dataAccessManager: DataAccessMan
         } yield {
           val sharedAttributes = personAttributes.intersect(relationAttributes)
 
-          val sharedNetworkScore = ScoreFactor.ShareNetwork(personNetwork.intersect(relationNetwork).size)
+          val sharedNetworkScore = ScoreFactor.ShareNetwork(personNetwork.map(_.entity.internalId.asString).intersect(relationNetwork.map(_.entity.internalId.asString)).size)
           val sharedInterests = ScoreFactor.ShareInterests(sharedAttributes.count(_.tpe == PersonAttributeType.Interest))
           val sharedWorkExperience = ScoreFactor.ShareWorkPlaces(sharedAttributes.count(_.tpe == PersonAttributeType.WorkExperience))
 

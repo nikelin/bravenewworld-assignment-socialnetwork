@@ -1,0 +1,17 @@
+@import services.RelationshipValueEstimator
+
+@(xs: Seq[(MaterializedEntity[Person], Seq[PersonAttribute], RelationshipValueEstimator.Score)])
+<table>
+    <thead>
+        <tr>
+            <th></th>
+            <th>Friend</th>
+            <th>Social Rank</th>
+        </tr>
+    </thead>
+    <tbody>
+        @(xs map { x =>
+            views.html.social.friendRow(x._1, x._2, x._3)
+        })
+    </tbody>
+</table>

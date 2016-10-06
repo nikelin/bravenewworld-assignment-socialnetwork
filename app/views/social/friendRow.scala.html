@@ -1,0 +1,17 @@
+@import services.RelationshipValueEstimator.Score
+@(person: MaterializedEntity[Person], attributes: Seq[PersonAttribute], score: Score)
+<tr>
+    <td>
+        <img src="@(attributes.find(attr => attr.tpe == PersonAttributeType.Photo).map(_.value.asInstanceOf[PersonAttributeValue.Photo].value))"
+        />
+    </td>
+    <td>
+        @(
+            attributes.find(attr =>
+                attr.tpe == PersonAttributeType.Text && attr.value.asInstanceOf[PersonAttributeValue.Text].name == PersonProfileField.Name.asString
+            )
+            .map(_.value.asInstanceOf[PersonAttributeValue.Text].value)
+        )
+    </td>
+    <td>@(score.totalValue)</td>
+</tr>

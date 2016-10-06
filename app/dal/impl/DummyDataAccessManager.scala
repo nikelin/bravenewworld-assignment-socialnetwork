@@ -2,11 +2,12 @@ package dal.impl
 
 import java.time.ZonedDateTime
 import java.util.UUID
+import java.util.concurrent.locks.ReentrantLock
 import javax.inject.Singleton
 
 import dal.DataAccessManager
 import models._
-import services.OAuth2Service
+import services.oauth.OAuth2Service
 
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
@@ -21,7 +22,6 @@ class DummyDataAccessManager extends DataAccessManager {
   private final val personToPersonIndex: mutable.Map[Id[Person], Seq[Id[Person]]] = new mutable.HashMap()
   private final val userToPersonsIndex: mutable.Map[Id[User], Seq[Id[Person]]] = new mutable.HashMap()
 
-
   override def findUserByPersonInternalId(internalId: UserAccountId)(implicit ec: ExecutionContext): Future[Option[MaterializedEntity[User]]] = {
     Future {
       persons.find(_.entity.internalId == internalId)
@@ -32,7 +32,7 @@ class DummyDataAccessManager extends DataAccessManager {
 
   override def createSession(accessToken: OAuth2Service.AccessToken, userId: Id[User])(implicit ec: ExecutionContext): Future[Id[UserSession]] =
     Future {
-      this.synchronized {
+      this.guarded {
         val record = materialize(UserSession(userId, accessToken.value, ZonedDateTime.now))
         sessions += record
         record.id
@@ -50,34 +50,36 @@ class DummyDataAccessManager extends DataAccessManager {
   override def findUserById(userId: Id[User])(implicit ec: ExecutionContext): Future[Option[MaterializedEntity[User]]] =
     Future { users.find(_.id.value == userId.value) }
 
-  override def addUser(user: User, initialSource: Person)(implicit ec: ExecutionContext): Future[Id[User]] = {
+  override def addUser(user: User, initialSource: Person)(implicit ec: ExecutionContext): Future[(Id[User], Id[Person])] = {
     Future {
-      this.synchronized {
+      this.guarded {
         val record = materialize(user)
         users += record
         record.id
       }
     } flatMap { recordId =>
-      linkPerson(recordId, initialSource) map { _ =>
-        recordId
+      linkPerson(recordId, initialSource) map { person =>
+        (recordId, person)
       }
     }
   }
 
   override def linkPerson(user: Id[User], person: Person)(implicit ec: ExecutionContext): Future[Id[Person]] = {
     Future {
-      val record: MaterializedEntity[Person] = if (!persons.exists(_.entity.internalId == person.internalId)) {
-        val materialized = materialize(person)
-        persons += materialized
-        materialized
-      } else persons.find(_.entity.internalId == person.internalId).get
+      this.guarded {
+        val record: MaterializedEntity[Person] = if (!persons.exists(_.entity.internalId == person.internalId)) {
+          val materialized = materialize(person)
+          persons += materialized
+          materialized
+        } else persons.find(_.entity.internalId == person.internalId).get
 
-      val userPersons = userToPersonsIndex.getOrElseUpdate(user, Seq())
-      if (userPersons.count(_.value == record.id.value) == 0) {
-        userToPersonsIndex.put(user, userPersons :+ record.id)
+        val userPersons = userToPersonsIndex.getOrElseUpdate(user, Seq.empty)
+        if (userPersons.count(_.value == record.id.value) == 0) {
+          userToPersonsIndex.put(user, userPersons :+ record.id)
+        }
+
+        record.id
       }
-
-      record.id
     }
   }
 
@@ -89,10 +91,10 @@ class DummyDataAccessManager extends DataAccessManager {
 
   override def linkRelation(left: Id[Person], right: Id[Person])(implicit ec: ExecutionContext): Future[Unit] = {
     Future {
-      this.synchronized {
+      this.guarded {
         val currentState = personToPersonIndex.getOrElseUpdate(left, Seq.empty)
         if ( currentState.count(_.value == right.value) == 0 ) {
-          personToPersonIndex.put(left, personToPersonIndex.getOrElseUpdate(left, Seq.empty) :+ right)
+          personToPersonIndex.put(left, personToPersonIndex.getOrElse(left, Seq.empty) :+ right)
         }
       }
     }
@@ -104,7 +106,8 @@ class DummyDataAccessManager extends DataAccessManager {
 
   override def findRelationsByPersonId(personId: Id[Person])(implicit ec: ExecutionContext): Future[Seq[MaterializedEntity[Person]]] = {
     Future {
-      personToPersonIndex.getOrElseUpdate(personId, Seq.empty).flatMap( p => persons.find(_.id.value == p.value))
+      personToPersonIndex.getOrElse(personId, Seq.empty).flatMap( p => persons.find(_.id.value == p.value))
+        .filter(_.id != personId)
     }
   }
 
@@ -138,7 +141,7 @@ class DummyDataAccessManager extends DataAccessManager {
 
   override def updatePerson(id: Id[Person], person: Person)(implicit ec: ExecutionContext): Future[Id[Person]] = {
     Future {
-      this.synchronized {
+      this.guarded {
         this.persons.find(_.id.value == id.value)
           .map { p =>
             this.persons.update(this.persons.indexOf(p), p.copy(entity = person))
@@ -151,7 +154,7 @@ class DummyDataAccessManager extends DataAccessManager {
 
   override def createPerson(person: Person)(implicit ec: ExecutionContext): Future[Id[Person]] = {
     Future {
-      this.synchronized {
+      this.guarded {
         this.persons.find(_.entity.internalId == person.internalId)
           .map(_.id)
           .getOrElse {
@@ -163,6 +166,41 @@ class DummyDataAccessManager extends DataAccessManager {
     }
   }
 
+
+  override def findAllPersons()(implicit ec: ExecutionContext): Future[Seq[MaterializedEntity[Person]]] = {
+    Future {
+      this.guarded {
+        this.persons map identity
+      }
+    }
+  }
+
+  override def updatePersonAttributes(id: Id[Person], attributes: Seq[PersonAttribute])(implicit ec: ExecutionContext): Future[Seq[PersonAttribute]] = {
+    Future {
+      this.guarded {
+        this.persons.find(_.id.value == id.value) match {
+          case Some(p) =>
+            val existAttributes = this.personAttributes.getOrElseUpdate(id, Seq.empty)
+            val diff = existAttributes.diff(attributes)
+
+            val result = mutable.ListBuffer[PersonAttribute](existAttributes.filter(e => diff.count(_ == e.tpe) == 0) : _*) ++ attributes
+
+            this.personAttributes.put(id, result)
+
+            result
+          case None => throw new IllegalArgumentException("person not found")
+        }
+      }
+    }
+  }
+
+
+  override def findPersonById(personId: Id[Person])(implicit ec: ExecutionContext): Future[Option[MaterializedEntity[Person]]] = {
+    Future {
+      persons.find(_.id.value == personId.value)
+    }
+  }
+
   override def findPersonAttributesByPersonId(personId: Id[Person])(implicit ec: ExecutionContext): Future[Seq[PersonAttribute]] = {
     Future {
       personAttributes.getOrElse(personId, Seq.empty)
@@ -171,5 +209,11 @@ class DummyDataAccessManager extends DataAccessManager {
 
   private def materialize[T](entity: T): MaterializedEntity[T] = {
     MaterializedEntity(Id[T](UUID.randomUUID().toString), entity)
+  }
+
+  private def guarded[T](block: => T): T = {
+    this.synchronized {
+      block
+    }
   }
 }

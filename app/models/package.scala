@@ -22,19 +22,34 @@ package object models {
 
   sealed trait UserAccountId {
     val serviceType: ServiceType
+
+    def asString: String
   }
 
   object UserAccountId {
-    case class FacebookId(value: String) extends UserAccountId {
+    object FacebookId {
+      sealed trait FacebookIdType
+      object FacebookIdType {
+        case object AppScopedId extends FacebookIdType
+        case object Username extends FacebookIdType
+        case object GlobalScopedId extends FacebookIdType
+      }
+    }
+
+    case class FacebookId(value: String, tpe: FacebookId.FacebookIdType) extends UserAccountId {
       override val serviceType = ServiceType.Facebook
+
+      override def asString: String = value
     }
 
     case class LinkedinId(value: String) extends UserAccountId {
       override val serviceType = ServiceType.Linkedin
+      override def asString: String = value
     }
 
     case class InstagramId(value: String) extends UserAccountId {
       override val serviceType = ServiceType.Instagram
+      override def asString: String = value
     }
   }
 
@@ -46,7 +61,7 @@ package object models {
 
   case class User(createdOn: ZonedDateTime) extends DomainEntity
 
-  case class Person(internalId: UserAccountId, profile: UserProfile) extends DomainEntity
+  case class Person(internalId: UserAccountId) extends DomainEntity
 
   case class UserProfile(name: String, photo: Option[String]) extends DomainEntity
 
@@ -69,6 +84,24 @@ package object models {
 
     case object WorkExperience extends PersonAttributeType {
       type Type = PersonAttributeValue.WorkExperience
+    }
+  }
+
+  sealed trait PersonProfileField {
+    val asString: String
+  }
+
+  object PersonProfileField {
+    case object UserName extends PersonProfileField {
+      override val asString = "userName"
+    }
+
+    case object GlobalScopedId extends PersonProfileField {
+      override val asString = "globalScopedId"
+    }
+
+    case object Name extends PersonProfileField {
+      override val asString = "name"
     }
   }
 

@@ -184,3 +184,7 @@ Means, that value of `{James Gibbs#14}` to `{Claire Wattkins#13}` is `1`.
 
 Ideally, we want much deeper discovery and intersections. But in most cases we are limited by data providers (Facebook) 
 constraints.
+
+#### Selenium and improved way of fetching user's data
+
+Due to strict oficial Facebook API 

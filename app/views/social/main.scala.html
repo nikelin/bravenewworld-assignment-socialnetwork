@@ -1,45 +1,26 @@
 @import services.RelationshipValueEstimator
-@(user: MaterializedEntity[User], applicationId: String, person: MaterializedEntity[Person], relations: Seq[(MaterializedEntity[Person], RelationshipValueEstimator.Score)])
+@(user: MaterializedEntity[User], applicationId: String, person: MaterializedEntity[Person],
+        personAttributes: Seq[PersonAttribute],
+        relations: Seq[(MaterializedEntity[Person], Seq[PersonAttribute],  RelationshipValueEstimator.Score)])
 
-@layout(title = "Home", styles = Seq("index.css"), scripts = Seq("social.js")) {
-    <div class="Social">
-        <div class="Social_top">
-            @(person.entity.profile.photo.map(photo => Html("<img src=\"" + photo + "\"/>")))
-            Welcome, @(person.entity.profile.name)! @(person.entity.internalId.serviceType.asString)
+@layout(title = "Home", styles = Seq("index.css")) {
+    <nav>
+        <div class="nav-wrapper">
+            <a href="#!" class="brand-logo">
+                @(personAttributes.find(_.tpe == PersonAttributeType.Photo).map(photo =>
+                    Html("<img src=\"" + photo.value.asInstanceOf[PersonAttributeValue.Photo].value + "\"/>")
+                ))
+
+                <span>
+                    @(personAttributes.find(attr =>
+                        attr.tpe == PersonAttributeType.Text && attr.value.asInstanceOf[PersonAttributeValue.Text].name == PersonProfileField.Name.asString
+                    ).map(v => v.value.asInstanceOf[PersonAttributeValue.Text].value))
+                </span>
+            </a>
         </div>
+    </nav>
 
-        <div class="Social__friends">
-            @(relations match {
-                case Nil =>
-                    <h3>We know nothing about your friends. Invite someone to install application first!</h3>
-                case xs: Seq[(MaterializedEntity[Person], RelationshipValueEstimator.Score)] =>
-                    Html("<ul>" + xs.map(x => "<li>" + x._1.entity.profile.name + ", score = " + x._2.totalValue + "</li>").mkString("\n") + "</ul>")
-            })
-
-            <button class="Social__invite">Invite someone now!</button>
-        </div>
+    <div class="Social__friends">
+        @views.html.social.friends(relations)
     </div>
-
-    <script type="text/javascript">
-        $(window).ready(function() {
-            $(".Social__invite").click(function (event) {
-                @(person.entity.internalId.serviceType match {
-                    case ServiceType.Facebook =>
-                        JavaScript("Social.facebookUi()")
-                    case ServiceType.Linkedin =>
-                        JavaScript("Social.linkedinUi()");
-                    case _ =>
-                })
-            })
-        });
-
-        window.fbAsyncInit = function() {
-            FB.init({
-                appId      : @(applicationId),
-                xfbml      : true,
-                version    : 'v2.7'
-            });
-            FB.AppEvents.logPageView();
-        }
-    </script>
 }
