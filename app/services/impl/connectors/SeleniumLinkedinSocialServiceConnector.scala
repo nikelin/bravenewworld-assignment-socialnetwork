@@ -163,6 +163,7 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
         } yield  result
 
         future onComplete { _ =>
+          logger.info("Future has been completed")
           webDriversPool.returnObject(driver)
         }
 
