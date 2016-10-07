@@ -25,9 +25,11 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
 
 
   override def requestInterestsList(accessToken: Option[AccessToken], personId: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = {
-    dataAccessManager.findPersonAttributesByPersonId(personId) map { attributes =>
-      val driver = webDriversPool.borrowObject()
+    logger.info("Borrowing web driver object")
+    val driver = webDriversPool.borrowObject()
+    logger.info("WebDriver instance obtained")
 
+    val future = dataAccessManager.findPersonAttributesByPersonId(personId) map { attributes =>
       val userNameAttribute = attributes.find(a =>
         a.tpe == PersonAttributeType.Text
           && a.value.asInstanceOf[PersonAttributeValue.Text].name == PersonProfileField.UserName.asString
@@ -35,6 +37,7 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
 
       userNameAttribute match {
         case Some(userName) =>
+          logger.info("Requesting user page to fetch updated data")
           driver.get(s"https://linkedin.com/in/${userName.value}")
 
           val endorsements = new WebDriverWait(driver, 5.seconds.toMillis).until(
@@ -44,8 +47,19 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
             PersonAttribute(PersonAttributeType.Interest)(PersonAttributeValue.Interest(endorsement.getAttribute("data-endorsed-item-name")))
           }
         case None =>
+          logger.info("Username is not available")
           throw new IllegalStateException("user name is not available")
       }
+    }
+
+    future onComplete (_ =>
+      webDriversPool.returnObject(driver)
+    )
+
+    future recover {
+      case e if NonFatal(e) =>
+        logger.error(e.getMessage, e)
+        throw e
     }
   }
 
