@@ -16,6 +16,7 @@ import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.collection.JavaConversions._
+import scala.util.control.NonFatal
 
 class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
                                              dataAccessManager: DataAccessManager,
@@ -49,9 +50,13 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
   }
 
   override def requestFriendsList(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[PersonWithAttributes]] = {
+    logger.info(s"Update friends list for $userId")
+
     userId match {
       case id: UserAccountId.LinkedinId =>
+        logger.info("Asking for an available object from drivers pool...")
         val driver = webDriversPool.borrowObject()
+        logger.info("Driver instance obtained")
 
         def runPaged(offset: Int, step: Int, total: Int, memberId: String, results: Seq[PersonWithAttributes]): Seq[PersonWithAttributes] = {
 
@@ -152,7 +157,9 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
 
                   memberId
                 case (Some(memberId), _) => memberId.value.asInstanceOf[PersonAttributeValue.Text].value
-                case _ => throw new IllegalArgumentException(s"corrupted person record #${person.id.value}")
+                case _ =>
+                  logger.error("Corruped person record")
+                  throw new IllegalArgumentException(s"corrupted person record #${person.id.value}")
               }
 
             runPaged(0, 10, -1, memberIdValue, Seq.empty[PersonWithAttributes]) map { person =>
@@ -167,7 +174,7 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
           webDriversPool.returnObject(driver)
         }
 
-        future
+        future recover {  case e if NonFatal(e) => logger.error(e.getMessage, e); throw e }
       case _ => Future.failed(new IllegalArgumentException("unsupported account ID"))
     }
   }
