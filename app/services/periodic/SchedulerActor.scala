@@ -143,9 +143,9 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
       }
 
     case e: Request =>
-      logger.debug(s"Unsupported or unacceptable request received $e")
+      logger.info(s"Unsupported or unacceptable request received $e")
     case e: RequestPrivate =>
-      logger.debug(s"Unsupported or unacceptable request received $e")
+      logger.info(s"Unsupported or unacceptable request received $e")
     case e: Any => logger.error(s"Unknown message received $e")
   }
 
