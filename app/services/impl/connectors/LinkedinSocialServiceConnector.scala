@@ -38,14 +38,14 @@ class LinkedinSocialServiceConnector(config: Config, wsClient: WSClient) extends
       val id = (response.json \ "id").as[String]
       val firstName = (response.json \ "firstName").as[String]
       val lastName = (response.json \ "lastName").as[String]
-      val pictureUrl = (response.json \ "pictureUrl").as[String]
+      val pictureUrl = (response.json \ "pictureUrl").asOpt[String]
       val publicProfileUrl = (response.json \ "publicProfileUrl").as[String]
 
       PersonWithAttributes(Person(UserAccountId.LinkedinId(id)), Seq(
         PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, firstName + " " + lastName)),
-        PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(pictureUrl)),
         PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.UserName.asString,
           publicProfileUrl.substring(publicProfileUrl.indexOf("/in/") + 4))))
+        ++ pictureUrl.map(picture => Seq(PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(picture)))).getOrElse(Seq.empty)
       )
     }
   }
