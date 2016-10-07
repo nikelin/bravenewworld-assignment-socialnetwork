@@ -14,7 +14,8 @@ import scala.concurrent.duration._
 class PeriodicScheduler @Inject() (system: ActorSystem, @Named("scheduler-actor") val schedulerActor: ActorRef)
   extends LazyLogging {
 
-  implicit val ec = ExecutionContext.Implicits.global
+  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
-  system.scheduler.schedule(10.seconds, 10.second, schedulerActor, SchedulerActor.Request.UpdateNetwork)
+  system.scheduler.schedule(10.seconds, 5.second, schedulerActor, SchedulerActor.Request.UpdateNetwork)
+  system.scheduler.schedule(10.seconds, 5.second, schedulerActor, SchedulerActor.Request.UpdateInterests)
 }

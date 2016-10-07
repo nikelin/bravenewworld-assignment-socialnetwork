@@ -15,11 +15,12 @@ import services.impl.RelationshipValueEstimatorImpl
 import services.RelationshipValueEstimator
 import services.oauth.SocialServiceConnectors
 import services.periodic.{PeriodicScheduler, SchedulerActor}
-import services.selenium.{AbstractSeleniumDriversFactory, FacebookSeleniumDriversFactory, LinkedinSeleniumDriversFactory}
+import services.selenium.{AbstractSeleniumDriversFactory, FacebookSeleniumDriversFactory, InstagramSeleniumDriversFactory, LinkedinSeleniumDriversFactory}
 
 object AppModule {
   val linkedinSeleniumDriversPool = "linkedin"
   val facebookSeleniumDriversPool = "facebook"
+  val instagramSeleniumDriversPool = "instagram"
 }
 
 class AppModule extends AbstractModule with AkkaGuiceSupport {
@@ -36,6 +37,10 @@ class AppModule extends AbstractModule with AkkaGuiceSupport {
     bind(new TypeLiteral[ObjectPool[WebDriver]] {})
       .annotatedWith(Names.named(AppModule.facebookSeleniumDriversPool))
       .toInstance(new GenericObjectPool(new FacebookSeleniumDriversFactory(config), driversPoolConfig))
+
+    bind(new TypeLiteral[ObjectPool[WebDriver]] {})
+      .annotatedWith(Names.named(AppModule.instagramSeleniumDriversPool))
+      .toInstance(new GenericObjectPool(new InstagramSeleniumDriversFactory(config), driversPoolConfig))
 
     bind(classOf[Config]).toInstance(config)
     bind(classOf[DataAccessManager]).to(classOf[DummyDataAccessManager])

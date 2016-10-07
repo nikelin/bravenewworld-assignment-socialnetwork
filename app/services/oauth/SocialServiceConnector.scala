@@ -14,9 +14,9 @@ trait SocialServiceConnector {
 
   val serviceType: ServiceType
 
-  def requestInterestsList(accessToken: Option[OAuth2Service.AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[PersonAttributeValue.Interest]]
+  def requestInterestsList(accessToken: Option[OAuth2Service.AccessToken], person: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]]
 
-  def requestWorkExperience(accessToken: Option[OAuth2Service.AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[PersonAttributeValue.WorkExperience]]
+  def requestWorkExperience(accessToken: Option[OAuth2Service.AccessToken], person: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]]
 
   def requestFriendsList(accessToken: Option[OAuth2Service.AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[PersonWithAttributes]]
 

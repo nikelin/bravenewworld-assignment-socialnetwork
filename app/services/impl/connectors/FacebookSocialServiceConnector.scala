@@ -20,9 +20,9 @@ class FacebookSocialServiceConnector @Inject() (config: Config, wsClient: WSClie
 
   override val serviceType = ServiceType.Facebook
 
-  override def requestInterestsList(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[Interest]] = ???
+  override def requestInterestsList(accessToken: Option[AccessToken], person: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = ???
 
-  override def requestWorkExperience(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[WorkExperience]] = ???
+  override def requestWorkExperience(accessToken: Option[AccessToken], person: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = ???
 
   override def requestFriendsList(accessTokenOpt: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[PersonWithAttributes]] = {
     accessTokenOpt.map( accessToken =>

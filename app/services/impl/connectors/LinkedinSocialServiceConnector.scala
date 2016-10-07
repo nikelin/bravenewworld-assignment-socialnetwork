@@ -15,11 +15,11 @@ class LinkedinSocialServiceConnector(config: Config, wsClient: WSClient) extends
 
   override val serviceType: ServiceType = ServiceType.Linkedin
 
-  override def requestInterestsList(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[Interest]] = {
+  override def requestInterestsList(accessToken: Option[AccessToken], person: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = {
     throw new IllegalStateException()
   }
 
-  override def requestWorkExperience(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[WorkExperience]] = {
+  override def requestWorkExperience(accessToken: Option[AccessToken], person: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = {
     throw new IllegalStateException()
   }
 
@@ -40,6 +40,7 @@ class LinkedinSocialServiceConnector(config: Config, wsClient: WSClient) extends
       val lastName = (response.json \ "lastName").as[String]
       val pictureUrl = (response.json \ "pictureUrl").as[String]
       val publicProfileUrl = (response.json \ "publicProfileUrl").as[String]
+
       PersonWithAttributes(Person(UserAccountId.LinkedinId(id)), Seq(
         PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, firstName + " " + lastName)),
         PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(pictureUrl)),

@@ -32,9 +32,9 @@ class SeleniumFacebookSocialServiceConnector(seleniumDriversPool: ObjectPool[Web
   import services.oauth.SocialServiceConnector._
   import utils._
 
-  override def requestInterestsList(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[Interest]] = ???
+  override def requestInterestsList(accessToken: Option[AccessToken], person: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = ???
 
-  override def requestWorkExperience(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[WorkExperience]] = ???
+  override def requestWorkExperience(accessToken: Option[AccessToken], person: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = ???
 
   override def requestFriendsList(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[PersonWithAttributes]] = {
     userId match {

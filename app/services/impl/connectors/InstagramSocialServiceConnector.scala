@@ -17,11 +17,11 @@ class InstagramSocialServiceConnector @Inject() (wsClient: WSClient, config: Con
 
   override val serviceType = ServiceType.Instagram
 
-  override def requestInterestsList(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[Interest]] = {
+  override def requestInterestsList(accessToken: Option[AccessToken], userId: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = {
     throw new IllegalStateException()
   }
 
-  override def requestWorkExperience(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[WorkExperience]] = {
+  override def requestWorkExperience(accessToken: Option[AccessToken], userId: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = {
     throw new IllegalStateException()
   }
 
@@ -54,14 +54,27 @@ class InstagramSocialServiceConnector @Inject() (wsClient: WSClient, config: Con
       val name = (response.json \ "data" \ "full_name").as[String]
       val id = (response.json \ "data" \ "id").as[String]
       val photo = (response.json \ "data" \ "profile_picture").asOpt[String]
+      val userName = (response.json \ "data" \ "username").as[String]
+      val follows = (response.json \ "data" \ "counts" \ "follows").as[Int]
+      val followedBy = (response.json \ "data" \ "counts" \ "followed_by").as[Int]
+      val media = (response.json \ "data" \ "counts" \ "media").as[Int]
 
-      PersonWithAttributes(Person(UserAccountId.InstagramId(id)),
-        Seq(
-          PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, name))
-        ) ++ photo.map( p =>
-          Seq(PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(p)))
-        ).getOrElse(Seq.empty)
+      val socialAttributes = Seq(
+        PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.FollowedByCount.asString, followedBy.toString)),
+        PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.FollowsCount.asString, follows.toString)),
+        PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.ContentCreatedCount.asString, media.toString)),
+        PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.UserName.asString, userName))
       )
+
+      val photoAttribute = photo.map( p =>
+        Seq(PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(p)))
+      ).getOrElse(Seq.empty)
+
+      val basicAttributes = Seq(
+        PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, if(name.isEmpty) userName else name))
+      )
+
+      PersonWithAttributes(Person(UserAccountId.InstagramId(id)), socialAttributes ++ photoAttribute ++ basicAttributes)
     }
   }
 }

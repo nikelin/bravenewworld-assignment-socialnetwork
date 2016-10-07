@@ -18,7 +18,7 @@ object SchedulerActor {
 
   private[SchedulerActor] sealed trait RequestPrivate
   private[SchedulerActor] object RequestPrivate {
-    case object ExecuteUpdates extends RequestPrivate
+    case object ExecuteNetworkUpdates extends RequestPrivate
     case class SchedulePersonUpdate(person: MaterializedEntity[Person], level: Int) extends Request
     case class ScheduleRelationsUpdate(person: MaterializedEntity[Person]) extends Request
   }
@@ -49,8 +49,16 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
   private final val active = mutable.HashSet[Id[Person]]()
   private final val processed = mutable.HashMap[Id[Person], Instant]()
 
+  override def preStart(): Unit = {
+    logger.info("Pre start")
+  }
+
+  override def postStop(): Unit = {
+    logger.info("Post stop")
+  }
+
   override def receive: Receive = {
-    case RequestPrivate.ExecuteUpdates if queue.nonEmpty && active.size < 5 =>
+    case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty && active.size < 5 =>
       val record = queue.dequeue()
       active += record.person.id
 
@@ -97,7 +105,7 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
       )
 
       if (!isScheduled && !isActive && !isRecentlyUpdated) {
-        queue += PrioritizedPerson(person, 1)
+        queue += PrioritizedPerson(person, level)
       }
 
     case Request.UpdateNetwork =>
@@ -115,11 +123,32 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
           }
         )
       }
-    case _: Request =>
-    case _: RequestPrivate =>
+
+    case Request.UpdateInterests =>
+      dataAccessManager.findAllUsers() flatMap { users =>
+        Future.sequence(
+          users map { user =>
+            dataAccessManager.findPersonsByUserId(user.id) flatMap { persons =>
+              Future.sequence(persons map { person =>
+                val connector = socialServiceConnectors.provideByAppId(person.entity.internalId.serviceType).get
+                connector.requestInterestsList(None, person.id) flatMap { interests =>
+                  dataAccessManager.updatePersonAttributes(person.id, interests.toSeq) map { attributes =>
+                    logger.info("Person interests has been updated")
+                  }
+                }
+              })
+            }
+          }
+        )
+      }
+
+    case e: Request =>
+      logger.debug(s"Unsupported or unacceptable request received $e")
+    case e: RequestPrivate =>
+      logger.debug(s"Unsupported or unacceptable request received $e")
     case e: Any => logger.error(s"Unknown message received $e")
   }
 
-  context.system.scheduler.schedule(0.seconds, 1.seconds, self, RequestPrivate.ExecuteUpdates)
+  context.system.scheduler.schedule(0.seconds, 1.seconds, self, RequestPrivate.ExecuteNetworkUpdates)
 
 }

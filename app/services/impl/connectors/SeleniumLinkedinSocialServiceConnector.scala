@@ -5,8 +5,9 @@ import com.typesafe.scalalogging.LazyLogging
 import dal.DataAccessManager
 import models._
 import org.apache.commons.pool2.ObjectPool
-import org.openqa.selenium.WebDriver
-import play.api.libs.json.{JsArray, Json}
+import org.openqa.selenium.support.ui.{ExpectedConditions, WebDriverWait}
+import org.openqa.selenium.{By, WebDriver}
+import play.api.libs.json.{JsArray, JsObject, Json}
 import play.api.libs.ws.WSClient
 import services.oauth.OAuth2Service.AccessToken
 import services.oauth.SocialServiceConnector.PersonWithAttributes
@@ -14,17 +15,48 @@ import services.oauth.SocialServiceConnector.PersonWithAttributes
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.collection.JavaConversions._
 
 class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
                                              dataAccessManager: DataAccessManager,
                                              webDriversPool: ObjectPool[WebDriver])
   extends LinkedinSocialServiceConnector(config, wsClient) with LazyLogging {
+
+
+  override def requestInterestsList(accessToken: Option[AccessToken], personId: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = {
+    dataAccessManager.findPersonAttributesByPersonId(personId) map { attributes =>
+      val driver = webDriversPool.borrowObject()
+
+      val userNameAttribute = attributes.find(a =>
+        a.tpe == PersonAttributeType.Text
+          && a.value.asInstanceOf[PersonAttributeValue.Text].name == PersonProfileField.UserName.asString
+      ).map(_.value.asInstanceOf[PersonAttributeValue.Text])
+
+      userNameAttribute match {
+        case Some(userName) =>
+          driver.get(s"https://linkedin.com/in/${userName.value}")
+
+          val endorsements = new WebDriverWait(driver, 5.seconds.toMillis).until(
+            ExpectedConditions.presenceOfAllElementsLocatedBy(By.cssSelector("li[data-endorsed-item-name]")))
+
+          endorsements.toList map { endorsement =>
+            PersonAttribute(PersonAttributeType.Interest)(PersonAttributeValue.Interest(endorsement.getAttribute("data-endorsed-item-name")))
+          }
+        case None =>
+          throw new IllegalStateException("user name is not available")
+      }
+    }
+  }
+
   override def requestFriendsList(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[PersonWithAttributes]] = {
     userId match {
       case id: UserAccountId.LinkedinId =>
         val driver = webDriversPool.borrowObject()
 
         def runPaged(offset: Int, step: Int, total: Int, memberId: String, results: Seq[PersonWithAttributes]): Seq[PersonWithAttributes] = {
+
+          logger.info("Fetching connections from " + s"https://www.linkedin.com/profile/profile-v2-connections?id=$memberId&offset=$offset&count=10&distance=1")
+
           driver.get(s"https://www.linkedin.com/profile/profile-v2-connections?id=$memberId&offset=$offset&count=10&distance=1")
 
           val htmlData = driver.getPageSource
@@ -36,31 +68,49 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
           val jsonData = htmlData.substring(jsonDataStart + jsonDataStartToken.length, jsonDataEnd)
 
           val parsedJson = Json.parse(jsonData)
-          val connections = (parsedJson \ "content" \ "connections" \ "connections").as[JsArray]
-          val totalConnections = (parsedJson \ "content" \ "connections" \ "numAll").as[Int]
+          val connectionsNode = (parsedJson \ "content" \ "connections").as[JsObject]
+          val connections =
+            if (connectionsNode.fields.nonEmpty ) (connectionsNode \ "connections").as[JsArray].value
+            else Seq.empty
 
-          val currentConnections = connections.value map { connection =>
-            PersonWithAttributes(
-              Person(UserAccountId.LinkedinId((connection \ "memberID").as[Int].toString)),
-              Seq(
-                PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString,
-                  (connection \ "fmt__full_name").as[String])),
-                PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.GlobalScopedId.asString,
-                  (connection \ "memberID").as[Int].toString))
-              ) ++ (connection \ "mem_pic").asOpt[String].map( pic =>
-                Seq(PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(pic)))
-              ).getOrElse(Seq.empty)
-            )
-          }
+          connections match {
+            case Nil => Seq.empty
+            case _ =>
+              val totalConnections = (connectionsNode \ "numAll").as[Int]
 
-          val subResult = results ++ currentConnections
+              val currentConnections = connections map { connection =>
+                val profileViewUrl = (connection \ "pview").as[String]
+                logger.info(s"Requesting connection profile URL $profileViewUrl", profileViewUrl)
+                driver.get(profileViewUrl)
 
-          val totalConnectionsUpdated = if(total == -1) totalConnections else total
-          if ( total == -1 || totalConnectionsUpdated - offset > step ) {
-            Thread.sleep(1.second.toMillis)
-            runPaged(offset + step, step, totalConnectionsUpdated, memberId, subResult)
-          } else {
-            subResult
+                val endorsements = new WebDriverWait(driver, 5.seconds.toMillis).until(
+                  ExpectedConditions.presenceOfAllElementsLocatedBy(By.cssSelector("li[data-endorsed-item-name]")))
+                val interests = endorsements.toList map { endorsement =>
+                  PersonAttribute(PersonAttributeType.Interest)(PersonAttributeValue.Interest(endorsement.getAttribute("data-endorsed-item-name")))
+                }
+
+                PersonWithAttributes(
+                  Person(UserAccountId.LinkedinId((connection \ "memberID").as[Int].toString)),
+                  Seq(
+                    PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString,
+                      (connection \ "fmt__full_name").as[String])),
+                    PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.GlobalScopedId.asString,
+                      (connection \ "memberID").as[Int].toString))
+                  ) ++ (connection \ "mem_pic").asOpt[String].map(pic =>
+                    Seq(PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(pic)))
+                  ).getOrElse(Seq.empty) ++ interests
+                )
+              }
+
+              val subResult = results ++ currentConnections
+
+              val totalConnectionsUpdated = if (total == -1) totalConnections else total
+              if (totalConnectionsUpdated - offset > step && step < totalConnectionsUpdated) {
+                Thread.sleep(1.second.toMillis)
+                runPaged(offset + step, step, totalConnectionsUpdated, memberId, subResult)
+              } else {
+                subResult
+              }
           }
         }
 
@@ -110,8 +160,6 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
               person
             }
           }
-
-          _ <- dataAccessManager.updatePersonAttributes(person.id, personAttributes)
         } yield  result
 
         future onComplete { _ =>

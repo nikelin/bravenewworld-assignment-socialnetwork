@@ -71,19 +71,19 @@ package object models {
 
   object PersonAttributeType {
     case object Photo extends PersonAttributeType {
-      type Value = PersonAttributeValue.Photo
+      override type Value = PersonAttributeValue.Photo
     }
 
     case object Text extends PersonAttributeType {
-      type Value = PersonAttributeValue.Text
+      override type Value = PersonAttributeValue.Text
     }
 
     case object Interest extends PersonAttributeType {
-      type Type = PersonAttributeValue.Interest
+      override type Value = PersonAttributeValue.Interest
     }
 
     case object WorkExperience extends PersonAttributeType {
-      type Type = PersonAttributeValue.WorkExperience
+      override type Value = PersonAttributeValue.WorkExperience
     }
   }
 
@@ -92,12 +92,24 @@ package object models {
   }
 
   object PersonProfileField {
+    case object FollowedByCount extends PersonProfileField {
+      override val asString = "followedByCount"
+    }
+
+    case object FollowsCount extends PersonProfileField {
+      override val asString = "followsCount"
+    }
+
     case object UserName extends PersonProfileField {
       override val asString = "userName"
     }
 
     case object GlobalScopedId extends PersonProfileField {
       override val asString = "globalScopedId"
+    }
+
+    case object ContentCreatedCount extends PersonProfileField {
+      override val asString = "contentCreatedCount"
     }
 
     case object Name extends PersonProfileField {
@@ -109,7 +121,7 @@ package object models {
   object PersonAttributeValue {
     case class Photo(value: String) extends PersonAttributeValue
     case class Text(name: String, value: String) extends PersonAttributeValue
-    case class Interest(value: DictionaryObject) extends PersonAttributeValue
+    case class Interest(value: String) extends PersonAttributeValue
     case class WorkExperience(company: Id[DictionaryObject], dateStart: ZonedDateTime, dateEnd: ZonedDateTime)
       extends PersonAttributeValue
     case class Relative(person: Id[Person]) extends PersonAttributeValue

@@ -14,7 +14,7 @@ object RelationshipValueEstimatorImpl {
 
   final val defaultWeightFunction: RelationshipValueEstimator.WeightFunction = {
     case ScoreFactor.ShareNetwork(count) => count
-    case ScoreFactor.ShareInterests(count) => count * 0.15
+    case ScoreFactor.ShareInterests(count) => count * 0.75
     case _ => 0
   }
 

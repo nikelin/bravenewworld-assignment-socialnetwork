@@ -16,6 +16,7 @@ import services.impl.connectors.{InstagramSocialServiceConnector, LinkedinSocial
 class SocialServiceConnectors @Inject() (wsClient: WSClient,
                                          @Named("facebook") facebookDriversPool: ObjectPool[WebDriver],
                                          @Named("linkedin") linkedinDriversPool: ObjectPool[WebDriver],
+                                         @Named("instagram") instagramDriversPool: ObjectPool[WebDriver],
                                          system: ActorSystem,
                                          dataAccessManager: DataAccessManager,
                                          config: Config) {
