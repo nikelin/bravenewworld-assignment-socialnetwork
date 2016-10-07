@@ -13,6 +13,7 @@ import services.oauth.SocialServiceConnector.PersonWithAttributes
 
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 
 class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
                                              dataAccessManager: DataAccessManager,
@@ -43,7 +44,9 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
               Person(UserAccountId.LinkedinId((connection \ "memberID").as[Int].toString)),
               Seq(
                 PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString,
-                  (connection \ "fmt__full_name").as[String]))
+                  (connection \ "fmt__full_name").as[String])),
+                PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.GlobalScopedId.asString,
+                  (connection \ "memberID").as[Int].toString))
               ) ++ (connection \ "mem_pic").asOpt[String].map( pic =>
                 Seq(PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(pic)))
               ).getOrElse(Seq.empty)
@@ -54,6 +57,7 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
 
           val totalConnectionsUpdated = if(total == -1) totalConnections else total
           if ( total == -1 || totalConnectionsUpdated - offset > step ) {
+            Thread.sleep(1.second.toMillis)
             runPaged(offset + step, step, totalConnectionsUpdated, memberId, subResult)
           } else {
             subResult
@@ -67,29 +71,41 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
           if personOpt.nonEmpty
           person = personOpt.get
           attributes <- dataAccessManager.findPersonAttributesByPersonId(person.id)
+
+          globalScopedIdOpt = attributes.find(a =>
+            a.tpe == PersonAttributeType.Text &&
+              a.value.asInstanceOf[PersonAttributeValue.Text].name == PersonProfileField.GlobalScopedId.asString
+          )
+
           userNameAttributeOpt = attributes.find(a =>
             a.tpe == PersonAttributeType.Text &&
               a.value.asInstanceOf[PersonAttributeValue.Text].name == PersonProfileField.UserName.asString
           )
-          if userNameAttributeOpt.nonEmpty
-          userNameAttribute = userNameAttributeOpt.get
 
           personOpt <- dataAccessManager.findPersonByInternalId(userId)
           if personOpt.isDefined
           person = personOpt.get
 
           result <- Future {
-            driver.get(s"https://linkedin.com/in/${userNameAttribute.value.asInstanceOf[PersonAttributeValue.Text].value}")
+            val memberIdValue =
+              (globalScopedIdOpt, userNameAttributeOpt) match {
+                case (_, Some(userNameAttribute)) =>
+                  driver.get(s"https://linkedin.com/in/${userNameAttribute.value.asInstanceOf[PersonAttributeValue.Text].value}")
 
-            val memberIdStartToken = "memberId    : \""
-            val memberIdStartIdx = driver.getPageSource.indexOf(memberIdStartToken)
-            val memberIdEndIdx = driver.getPageSource.indexOf("\"", memberIdStartIdx + memberIdStartToken.length)
+                  val memberIdStartToken = "memberId    : \""
+                  val memberIdStartIdx = driver.getPageSource.indexOf(memberIdStartToken)
+                  val memberIdEndIdx = driver.getPageSource.indexOf("\"", memberIdStartIdx + memberIdStartToken.length)
 
-            val memberId = driver.getPageSource.substring(memberIdStartIdx + memberIdStartToken.length, memberIdEndIdx).replaceAll("\"", "")
+                  val memberId = driver.getPageSource.substring(memberIdStartIdx + memberIdStartToken.length, memberIdEndIdx).replaceAll("\"", "")
 
-            personAttributes += PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.GlobalScopedId.asString, memberId))
+                  personAttributes += PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.GlobalScopedId.asString, memberId))
 
-            runPaged(0, 10, -1, memberId, Seq.empty[PersonWithAttributes]) map { person =>
+                  memberId
+                case (Some(memberId), _) => memberId.value.asInstanceOf[PersonAttributeValue.Text].value
+                case _ => throw new IllegalArgumentException(s"corrupted person record #${person.id.value}")
+              }
+
+            runPaged(0, 10, -1, memberIdValue, Seq.empty[PersonWithAttributes]) map { person =>
               logger.info(s"Person #${person.person.internalId} fetched")
               person
             }

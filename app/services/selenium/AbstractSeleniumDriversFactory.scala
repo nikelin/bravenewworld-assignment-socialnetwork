@@ -63,6 +63,7 @@ abstract class AbstractSeleniumDriversFactory @Inject()(settings: Config) extend
         .quickRender(true)
         .hostnameVerification(false)
         .processes(10)
+        .blockAds(true)
         .timezone(Timezone.AMERICA_NEWYORK)
         .build()
     )
