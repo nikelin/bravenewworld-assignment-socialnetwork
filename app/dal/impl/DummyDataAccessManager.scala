@@ -194,10 +194,16 @@ class DummyDataAccessManager extends DataAccessManager {
     }
   }
 
-
   override def findPersonById(personId: Id[Person])(implicit ec: ExecutionContext): Future[Option[MaterializedEntity[Person]]] = {
     Future {
       persons.find(_.id.value == personId.value)
+    }
+  }
+
+  override def computePersonLevel(person: Id[Person])(implicit ec: ExecutionContext): Future[Int] = {
+    Future {
+        if ( userToPersonsIndex.exists(_._2.count(_.value == person.value) != 0) ) 1
+        else 0
     }
   }
 

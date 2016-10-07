@@ -11,15 +11,15 @@ import org.openqa.selenium.WebDriver
 import play.api.libs.concurrent.AkkaGuiceSupport
 
 import scala.concurrent.duration._
-
 import services.impl.RelationshipValueEstimatorImpl
 import services.RelationshipValueEstimator
 import services.oauth.SocialServiceConnectors
 import services.periodic.{PeriodicScheduler, SchedulerActor}
-import services.selenium.SeleniumDriversFactory
+import services.selenium.{AbstractSeleniumDriversFactory, FacebookSeleniumDriversFactory, LinkedinSeleniumDriversFactory}
 
 object AppModule {
-  val seleniumDriversPool = "seleniumDriversPool"
+  val linkedinSeleniumDriversPool = "linkedin"
+  val facebookSeleniumDriversPool = "facebook"
 }
 
 class AppModule extends AbstractModule with AkkaGuiceSupport {
@@ -30,8 +30,12 @@ class AppModule extends AbstractModule with AkkaGuiceSupport {
     driversPoolConfig.setMaxTotal(2)
 
     bind(new TypeLiteral[ObjectPool[WebDriver]] {})
-      .annotatedWith(Names.named(AppModule.seleniumDriversPool))
-      .toInstance(new GenericObjectPool(new SeleniumDriversFactory(config), driversPoolConfig))
+      .annotatedWith(Names.named(AppModule.linkedinSeleniumDriversPool))
+      .toInstance(new GenericObjectPool(new LinkedinSeleniumDriversFactory(config), driversPoolConfig))
+
+    bind(new TypeLiteral[ObjectPool[WebDriver]] {})
+      .annotatedWith(Names.named(AppModule.facebookSeleniumDriversPool))
+      .toInstance(new GenericObjectPool(new FacebookSeleniumDriversFactory(config), driversPoolConfig))
 
     bind(classOf[Config]).toInstance(config)
     bind(classOf[DataAccessManager]).to(classOf[DummyDataAccessManager])

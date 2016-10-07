@@ -2,8 +2,11 @@
 @(person: MaterializedEntity[Person], attributes: Seq[PersonAttribute], score: Score)
 <tr>
     <td>
-        <img src="@(attributes.find(attr => attr.tpe == PersonAttributeType.Photo).map(_.value.asInstanceOf[PersonAttributeValue.Photo].value))"
-        />
+        @(
+            attributes.find(attr => attr.tpe == PersonAttributeType.Photo).map( photo =>
+                Html("<img src=\"" + photo.value.asInstanceOf[PersonAttributeValue.Photo].value + "\"/>")
+            ).getOrElse(Html("No photo available"))
+        )
     </td>
     <td>
         @(

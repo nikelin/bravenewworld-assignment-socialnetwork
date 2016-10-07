@@ -6,11 +6,8 @@ import javax.inject.Inject
 import akka.actor.Actor
 import com.typesafe.scalalogging.LazyLogging
 import dal.DataAccessManager
-import models.{Id, Person}
-import services.oauth.OAuth2Service.AccessToken
-import services.oauth.SocialServiceConnector.PersonWithAttributes
+import models.{Id, MaterializedEntity, Person}
 import services.oauth.SocialServiceConnectors
-import services.periodic.SchedulerActor.Request.SchedulePersonUpdate
 
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
@@ -22,17 +19,22 @@ object SchedulerActor {
   private[SchedulerActor] sealed trait RequestPrivate
   private[SchedulerActor] object RequestPrivate {
     case object ExecuteUpdates extends RequestPrivate
+    case class SchedulePersonUpdate(person: MaterializedEntity[Person], level: Int) extends Request
+    case class ScheduleRelationsUpdate(person: MaterializedEntity[Person]) extends Request
   }
 
   sealed trait Request
   object Request {
-    case class SchedulePersonUpdate(person: Id[Person]) extends Request
     case object UpdateNetwork extends Request
     case object UpdateProfile extends Request
     case object UpdateWorkExperience extends Request
     case object UpdateInterests extends Request
     case object UpdateSocialActivity extends Request
   }
+
+  case class PrioritizedPerson(person: MaterializedEntity[Person], level: Int)
+
+  implicit val prioritizedPersonOrdering: Ordering[PrioritizedPerson] = Ordering.fromLessThan(_.level < _.level)
 
 }
 
@@ -43,29 +45,26 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
 
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
-  private final val queue = mutable.Queue[Id[Person]]()
+  private final val queue = mutable.PriorityQueue[PrioritizedPerson]()
   private final val active = mutable.HashSet[Id[Person]]()
   private final val processed = mutable.HashMap[Id[Person], Instant]()
 
   override def receive: Receive = {
     case RequestPrivate.ExecuteUpdates if queue.nonEmpty && active.size < 5 =>
       val record = queue.dequeue()
-      active += record
+      active += record.person.id
+
+      val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
+        .get
 
       (for {
-        personOpt <- dataAccessManager.findPersonById(record)
-        if personOpt.nonEmpty
-        person = personOpt.get
-        connectorOpt = socialServiceConnectors.provideByAppId(person.entity.internalId.serviceType)
-        if connectorOpt.nonEmpty
-        connector = connectorOpt.get
-        friendsList <- connector.requestFriendsList(None, person.entity.internalId) flatMap (result =>
+        friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
           Future.sequence(result map { friend =>
             dataAccessManager.updateOrCreatePerson(friend.person) flatMap { friendId =>
               logger.info("Person created")
               dataAccessManager.updatePersonAttributes(friendId, friend.attribute) flatMap { _ =>
                 logger.info("Person attributes updated")
-                dataAccessManager.linkRelation(person.id, friendId) map { _ =>
+                dataAccessManager.linkRelation(record.person.id, friendId) map { _ =>
                   logger.info("Relations updated")
                 }
               }
@@ -74,35 +73,53 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
         )
       } yield {
         logger.info(s"${friendsList.size} nodes updated/created")
-        active -= record
-        processed.put(record, Instant.now())
+        active -= record.person.id
+        processed.put(record.person.id, Instant.now())
       }) recover {
         case e if NonFatal(e) =>
           logger.error("UpdateNetwork request failed", e)
-          active -= record
-          processed.put(record, Instant.now())
+          active -= record.person.id
+          processed.put(record.person.id, Instant.now())
       }
 
-    case Request.SchedulePersonUpdate(person) =>
-      val isScheduled = queue.exists(_.value == person.value)
-      val isActive = active.exists(_.value == person.value)
-      val isRecentlyUpdated = processed.get(person).exists(time =>
+    case RequestPrivate.ScheduleRelationsUpdate(person) =>
+      dataAccessManager.findRelationsByPersonId(person.id) map { persons =>
+        persons foreach { person =>
+          self ! RequestPrivate.SchedulePersonUpdate(person, 2)
+        }
+      }
+
+    case RequestPrivate.SchedulePersonUpdate(person, level) =>
+      val isScheduled = queue.exists(_.person.id.value == person.id.value)
+      val isActive = active.exists(_.value == person.id.value)
+      val isRecentlyUpdated = processed.get(person.id).exists(time =>
         Instant.now.toEpochMilli - time.toEpochMilli > 5.minutes.toMillis
       )
 
       if (!isScheduled && !isActive && !isRecentlyUpdated) {
-        queue += person
+        queue += PrioritizedPerson(person, 1)
       }
 
     case Request.UpdateNetwork =>
-      dataAccessManager.findAllPersons() map { persons =>
-        persons foreach { person =>
-          self ! Request.SchedulePersonUpdate(person.id)
-        }
+      dataAccessManager.findAllUsers() flatMap { users =>
+        Future.sequence(
+          users map { user =>
+            dataAccessManager.findPersonsByUserId(user.id) map { persons =>
+              persons foreach { person =>
+                dataAccessManager.computePersonLevel(person.id) map { level =>
+                  self ! RequestPrivate.ScheduleRelationsUpdate(person)
+                  self ! RequestPrivate.SchedulePersonUpdate(person, 1)
+                }
+              }
+            }
+          }
+        )
       }
-    case e: Any =>
+    case _: Request =>
+    case _: RequestPrivate =>
+    case e: Any => logger.error(s"Unknown message received $e")
   }
 
-  context.system.scheduler.schedule(0.seconds, 5.seconds, self, RequestPrivate.ExecuteUpdates)
+  context.system.scheduler.schedule(0.seconds, 1.seconds, self, RequestPrivate.ExecuteUpdates)
 
 }

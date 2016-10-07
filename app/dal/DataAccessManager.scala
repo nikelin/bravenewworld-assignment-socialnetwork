@@ -6,6 +6,8 @@ import services.oauth.OAuth2Service
 import scala.concurrent.{ExecutionContext, Future}
 
 trait DataAccessManager {
+  def computePersonLevel(person: Id[Person])(implicit ec: ExecutionContext): Future[Int]
+
   def findUserByPersonInternalId(internalId: UserAccountId)(implicit ec: ExecutionContext): Future[Option[MaterializedEntity[User]]]
 
   def findPersonById(personId: Id[Person])(implicit ec: ExecutionContext): Future[Option[MaterializedEntity[Person]]]

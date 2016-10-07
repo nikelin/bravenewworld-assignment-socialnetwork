@@ -10,19 +10,20 @@ import modules.AppModule
 import org.apache.commons.pool2.ObjectPool
 import org.openqa.selenium.WebDriver
 import play.api.libs.ws.WSClient
-import services.impl.connectors.{InstagramSocialServiceConnector, LinkedinSocialServiceConnector, SeleniumFacebookSocialServiceConnector}
+import services.impl.connectors.{InstagramSocialServiceConnector, LinkedinSocialServiceConnector, SeleniumFacebookSocialServiceConnector, SeleniumLinkedinSocialServiceConnector}
 
 @Singleton
 class SocialServiceConnectors @Inject() (wsClient: WSClient,
-                                         @Named("seleniumDriversPool") driversPool: ObjectPool[WebDriver],
+                                         @Named("facebook") facebookDriversPool: ObjectPool[WebDriver],
+                                         @Named("linkedin") linkedinDriversPool: ObjectPool[WebDriver],
                                          system: ActorSystem,
                                          dataAccessManager: DataAccessManager,
                                          config: Config) {
 
   private final val connectors = Seq[SocialServiceConnector](
-    new SeleniumFacebookSocialServiceConnector(driversPool, dataAccessManager, config, wsClient)(system),
+    new SeleniumFacebookSocialServiceConnector(facebookDriversPool, dataAccessManager, config, wsClient)(system),
     new InstagramSocialServiceConnector(wsClient, config),
-    new LinkedinSocialServiceConnector(config, wsClient)
+    new SeleniumLinkedinSocialServiceConnector(config, wsClient, dataAccessManager, linkedinDriversPool)
   )
 
   def provideByAppId(serviceType: ServiceType): Option[SocialServiceConnector] = {

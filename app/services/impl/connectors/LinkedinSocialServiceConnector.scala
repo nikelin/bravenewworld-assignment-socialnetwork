@@ -28,7 +28,7 @@ class LinkedinSocialServiceConnector(config: Config, wsClient: WSClient) extends
   }
 
   override def requestUserProfile(accessToken: AccessToken)(implicit ec: ExecutionContext): Future[PersonWithAttributes] = {
-    wsClient.url(endpointUrl(config) + "/v1/people/~:(id,firstName,lastName,picture-url)")
+    wsClient.url(endpointUrl(config) + "/v1/people/~:(id,public-profile-url,firstName,lastName,picture-url)")
       .withQueryString(
         "oauth2_access_token" -> accessToken.value,
         "format" -> "json"
@@ -39,9 +39,13 @@ class LinkedinSocialServiceConnector(config: Config, wsClient: WSClient) extends
       val firstName = (response.json \ "firstName").as[String]
       val lastName = (response.json \ "lastName").as[String]
       val pictureUrl = (response.json \ "pictureUrl").as[String]
+      val publicProfileUrl = (response.json \ "publicProfileUrl").as[String]
       PersonWithAttributes(Person(UserAccountId.LinkedinId(id)), Seq(
         PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, firstName + " " + lastName)),
-        PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(pictureUrl))))
+        PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(pictureUrl)),
+        PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.UserName.asString,
+          publicProfileUrl.substring(publicProfileUrl.indexOf("/in/") + 4))))
+      )
     }
   }
 }

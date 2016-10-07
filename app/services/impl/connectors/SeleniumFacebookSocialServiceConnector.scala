@@ -1,6 +1,7 @@
 package services.impl.connectors
 
 import java.time.Instant
+import javax.inject.Named
 
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.pattern._
@@ -23,7 +24,8 @@ import scala.util.control.NonFatal
 
 class SeleniumFacebookSocialServiceConnector(seleniumDriversPool: ObjectPool[WebDriver],
                                              dataAccessManager: DataAccessManager,
-                                             config: Config, wsClient: WSClient)(implicit system: ActorSystem)
+                                             config: Config,
+                                             wsClient: WSClient)(implicit system: ActorSystem)
   extends FacebookSocialServiceConnector(config, wsClient)
     with LazyLogging {
 
