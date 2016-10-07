@@ -37,11 +37,12 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
 
       userNameAttribute match {
         case Some(userName) =>
-          logger.info("Requesting user page to fetch updated data")
-          driver.get(s"https://linkedin.com/in/${userName.value}")
+          val userPageUrl = s"https://linkedin.com/in/${userName.value}"
+          logger.info(s"Requesting user page to fetch updated data: $userPageUrl")
+          driver.get(userPageUrl)
+          Thread.sleep(5.seconds.toMillis)
 
-          val endorsements = new WebDriverWait(driver, 5.seconds.toMillis).until(
-            ExpectedConditions.presenceOfAllElementsLocatedBy(By.cssSelector("li[data-endorsed-item-name]")))
+          val endorsements = driver.findElements(By.cssSelector("li[data-endorsed-item-name]"))
 
           endorsements.toList map { endorsement =>
             PersonAttribute(PersonAttributeType.Interest)(PersonAttributeValue.Interest(endorsement.getAttribute("data-endorsed-item-name")))

@@ -149,6 +149,6 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
     case e: Any => logger.error(s"Unknown message received $e")
   }
 
-  context.system.scheduler.schedule(0.seconds, 1.seconds, self, RequestPrivate.ExecuteNetworkUpdates)
+  context.system.scheduler.schedule(0.seconds, 5.seconds, self, RequestPrivate.ExecuteNetworkUpdates)
 
 }
