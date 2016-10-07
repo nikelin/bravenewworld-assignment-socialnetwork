@@ -50,8 +50,8 @@ abstract class AbstractSeleniumDriversFactory @Inject()(settings: Config) extend
     new JBrowserDriver(
       Settings.builder()
         .cache(true)
-        .userDataDirectory(new File("C:/SubWork/bnw/userData"))
-        .cacheDir(new File("C:/SubWork/bnw/cache"))
+        .userDataDirectory(new File(settings.getString("selenium.userDataPath")))
+        .cacheDir(new File(settings.getString("selenium.userCachePath")))
         .maxRouteConnections(100)
         .saveMedia(true)
         .requestHeaders(RequestHeaders.CHROME)
