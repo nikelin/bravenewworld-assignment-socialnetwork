@@ -28,8 +28,8 @@ class LinkedinSeleniumDriversFactory @Inject() (settings: Config) extends Abstra
 
     val loginForm = p.getObject.findElement(By.id("login"))
 
-    "linkedin:email:sendKeys" timing { email.sendKeys("testatestb@nikelin.ru") }
-    "linkedin:email:password" timing { pass.sendKeys("testatestb") }
+    "linkedin:email:sendKeys" timing { email.sendKeys(settings.getString("oauth.linkedin.botAccount.email")) }
+    "linkedin:email:password" timing { pass.sendKeys(settings.getString("oauth.linkedin.botAccount.password")) }
 
     "linkedin:form:submit" timing { loginForm.submit() }
   }

@@ -26,8 +26,8 @@ class InstagramSeleniumDriversFactory @Inject()(settings: Config) extends Abstra
 
     val loginForm = p.getObject.findElement(By.cssSelector("form"))
 
-    "email:sendKeys" timing { email.sendKeys("michaeltestovich") }
-    "email:password" timing { pass.sendKeys("testatestb") }
+    "email:sendKeys" timing { email.sendKeys(settings.getString("oauth.instagram.botAccount.username")) }
+    "email:password" timing { pass.sendKeys(settings.getString("oauth.instagram.botAccount.password")) }
 
     "form:submit" timing { loginForm.submit() }
   }

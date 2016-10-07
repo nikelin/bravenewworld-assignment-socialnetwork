@@ -26,8 +26,8 @@ class FacebookSeleniumDriversFactory @Inject()(settings: Config) extends Abstrac
 
     val loginForm = p.getObject.findElement(By.cssSelector("form[data-sigil='m_login_form']"))
 
-    "email:sendKeys" timing { email.sendKeys("testatestc@nikelin.ru") }
-    "email:password" timing { pass.sendKeys("testatestc") }
+    "email:sendKeys" timing { email.sendKeys(settings.getString("oauth.facebook.botAccount.email")) }
+    "email:password" timing { pass.sendKeys(settings.getString("oauth.facebook.botAccount.password")) }
 
     "form:submit" timing { loginForm.submit() }
   }
