@@ -58,7 +58,7 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
   }
 
   override def receive: Receive = {
-    case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty && active.size < 5 =>
+    case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty =>
       val record = queue.dequeue()
       active += record.person.id
 
