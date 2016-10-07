@@ -28,7 +28,7 @@ class AppModule extends AbstractModule with AkkaGuiceSupport {
     val config = ConfigFactory.load
 
     val driversPoolConfig = new GenericObjectPoolConfig()
-    driversPoolConfig.setMaxTotal(1)
+    driversPoolConfig.setMaxTotal(config.getInt("selenium.maxTotal"))
     driversPoolConfig.setMaxWaitMillis(1.minute.toMillis)
 
     bind(new TypeLiteral[ObjectPool[WebDriver]] {})
