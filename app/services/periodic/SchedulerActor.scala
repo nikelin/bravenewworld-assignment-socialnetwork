@@ -34,7 +34,7 @@ object SchedulerActor {
 
   case class PrioritizedPerson(person: MaterializedEntity[Person], level: Int)
 
-  implicit val prioritizedPersonOrdering: Ordering[PrioritizedPerson] = Ordering.fromLessThan(_.level < _.level)
+  implicit val prioritizedPersonOrdering: Ordering[PrioritizedPerson] = Ordering.fromLessThan((l, r) => l.level > r.level)
 
 }
 
