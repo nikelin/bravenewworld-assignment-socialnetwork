@@ -69,11 +69,7 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
 
     userId match {
       case id: UserAccountId.LinkedinId =>
-        logger.info("Asking for an available object from drivers pool...")
-        val driver = webDriversPool.borrowObject()
-        logger.info("Driver instance obtained")
-
-        def runPaged(offset: Int, step: Int, total: Int, memberId: String, results: Seq[PersonWithAttributes]): Seq[PersonWithAttributes] = {
+        def runPaged(driver: WebDriver, offset: Int, step: Int, total: Int, memberId: String, results: Seq[PersonWithAttributes]): Seq[PersonWithAttributes] = {
 
           logger.info("Fetching connections from " + s"https://www.linkedin.com/profile/profile-v2-connections?id=$memberId&offset=$offset&count=10&distance=1")
 
@@ -127,7 +123,7 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
               val totalConnectionsUpdated = if (total == -1) totalConnections else total
               if (totalConnectionsUpdated - offset > step && step < totalConnectionsUpdated) {
                 Thread.sleep(1.second.toMillis)
-                runPaged(offset + step, step, totalConnectionsUpdated, memberId, subResult)
+                runPaged(driver, offset + step, step, totalConnectionsUpdated, memberId, subResult)
               } else {
                 subResult
               }
@@ -156,38 +152,44 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
           if personOpt.isDefined
           person = personOpt.get
 
-          result <- Future {
-            val memberIdValue =
-              (globalScopedIdOpt, userNameAttributeOpt) match {
-                case (_, Some(userNameAttribute)) =>
-                  driver.get(s"https://linkedin.com/in/${userNameAttribute.value.asInstanceOf[PersonAttributeValue.Text].value}")
+          driver <- Future { webDriversPool.borrowObject() }
 
-                  val memberIdStartToken = "memberId    : \""
-                  val memberIdStartIdx = driver.getPageSource.indexOf(memberIdStartToken)
-                  val memberIdEndIdx = driver.getPageSource.indexOf("\"", memberIdStartIdx + memberIdStartToken.length)
+          result <- {
+            val future = Future {
+              val memberIdValue =
+                (globalScopedIdOpt, userNameAttributeOpt) match {
+                  case (_, Some(userNameAttribute)) =>
+                    driver.get(s"https://linkedin.com/in/${userNameAttribute.value.asInstanceOf[PersonAttributeValue.Text].value}")
 
-                  val memberId = driver.getPageSource.substring(memberIdStartIdx + memberIdStartToken.length, memberIdEndIdx).replaceAll("\"", "")
+                    val memberIdStartToken = "memberId    : \""
+                    val memberIdStartIdx = driver.getPageSource.indexOf(memberIdStartToken)
+                    val memberIdEndIdx = driver.getPageSource.indexOf("\"", memberIdStartIdx + memberIdStartToken.length)
 
-                  personAttributes += PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.GlobalScopedId.asString, memberId))
+                    val memberId = driver.getPageSource.substring(memberIdStartIdx + memberIdStartToken.length, memberIdEndIdx).replaceAll("\"", "")
 
-                  memberId
-                case (Some(memberId), _) => memberId.value.asInstanceOf[PersonAttributeValue.Text].value
-                case _ =>
-                  logger.error("Corruped person record")
-                  throw new IllegalArgumentException(s"corrupted person record #${person.id.value}")
+                    personAttributes += PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.GlobalScopedId.asString, memberId))
+
+                    memberId
+                  case (Some(memberId), _) => memberId.value.asInstanceOf[PersonAttributeValue.Text].value
+                  case _ =>
+                    logger.error("Corruped person record")
+                    throw new IllegalArgumentException(s"corrupted person record #${person.id.value}")
+                }
+
+              runPaged(driver, 0, 10, -1, memberIdValue, Seq.empty[PersonWithAttributes]) map { person =>
+                logger.info(s"Person #${person.person.internalId} fetched")
+                person
               }
-
-            runPaged(0, 10, -1, memberIdValue, Seq.empty[PersonWithAttributes]) map { person =>
-              logger.info(s"Person #${person.person.internalId} fetched")
-              person
             }
+
+            future onComplete { _ =>
+              logger.info("Future has been completed")
+              webDriversPool.returnObject(driver)
+            }
+
+            future
           }
         } yield  result
-
-        future onComplete { _ =>
-          logger.info("Future has been completed")
-          webDriversPool.returnObject(driver)
-        }
 
         future recover {  case e if NonFatal(e) => logger.error(e.getMessage, e); throw e }
       case _ => Future.failed(new IllegalArgumentException("unsupported account ID"))

@@ -37,7 +37,7 @@ class SeleniumFacebookSocialServiceConnector(seleniumDriversPool: ObjectPool[Web
   override def requestWorkExperience(accessToken: Option[AccessToken], person: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = ???
 
   override def requestFriendsList(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[PersonWithAttributes]] = {
-    userId match {
+    Future(userId match {
       case userId: UserAccountId.FacebookId =>
         val personAttributes = mutable.ListBuffer[PersonAttribute]()
 
@@ -126,7 +126,7 @@ class SeleniumFacebookSocialServiceConnector(seleniumDriversPool: ObjectPool[Web
 
           logger.info(s"${friendsList.size} relations fetched")
 
-          Future(friendsList)
+          friendsList
         } catch {
           case e if NonFatal(e) =>
             logger.error("Fetching failed", e)
@@ -135,7 +135,7 @@ class SeleniumFacebookSocialServiceConnector(seleniumDriversPool: ObjectPool[Web
           seleniumDriversPool.returnObject(driver)
         }
       case _ =>
-        Future.failed(new IllegalArgumentException("unsupported ID type"))
-    }
+        throw new IllegalArgumentException("unsupported ID type")
+    })
   }
 }

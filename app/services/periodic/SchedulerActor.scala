@@ -43,14 +43,14 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
   extends Actor with LazyLogging {
   import SchedulerActor._
 
-  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
+  implicit val ec: ExecutionContext = context.system.dispatchers.lookup("scheduler-dispatcher")
 
   private final val queue = mutable.PriorityQueue[PrioritizedPerson]()
   private final val active = mutable.HashSet[Id[Person]]()
   private final val processed = mutable.HashMap[Id[Person], Instant]()
 
   override def preStart(): Unit = {
-    logger.info("Pre start")
+    context.system.scheduler.schedule(0.seconds, 1.seconds, self, RequestPrivate.ExecuteNetworkUpdates)
   }
 
   override def postStop(): Unit = {
@@ -58,7 +58,7 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
   }
 
   override def receive: Receive = {
-    case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty =>
+    case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty && active.size < 10 =>
       val record = queue.dequeue()
       active += record.person.id
 
@@ -93,7 +93,7 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
     case RequestPrivate.ScheduleRelationsUpdate(person) =>
       dataAccessManager.findRelationsByPersonId(person.id) map { persons =>
         persons foreach { person =>
-          self ! RequestPrivate.SchedulePersonUpdate(person, 2)
+          self ! RequestPrivate.SchedulePersonUpdate(person, 1)
         }
       }
 
@@ -116,7 +116,7 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
               persons foreach { person =>
                 dataAccessManager.computePersonLevel(person.id) map { level =>
                   self ! RequestPrivate.ScheduleRelationsUpdate(person)
-                  self ! RequestPrivate.SchedulePersonUpdate(person, 1)
+                  self ! RequestPrivate.SchedulePersonUpdate(person, 0)
                 }
               }
             }
@@ -148,7 +148,5 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
       logger.info(s"Unsupported or unacceptable request received $e")
     case e: Any => logger.error(s"Unknown message received $e")
   }
-
-  context.system.scheduler.schedule(0.seconds, 5.seconds, self, RequestPrivate.ExecuteNetworkUpdates)
 
 }
