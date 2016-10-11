@@ -38,14 +38,14 @@ class SeleniumFacebookSocialServiceConnector(seleniumDriversPool: Pool[WebDriver
   override def requestWorkExperience(accessToken: Option[AccessToken], person: Id[Person])(implicit ec: ExecutionContext): Future[Iterable[PersonAttribute]] = ???
 
   override def requestFriendsList(accessToken: Option[AccessToken], userId: UserAccountId)(implicit ec: ExecutionContext): Future[Iterable[PersonWithAttributes]] = {
-    Future(userId match {
+    userId match {
       case userId: UserAccountId.FacebookId =>
         val personAttributes = mutable.ListBuffer[PersonAttribute]()
 
         val driverLease = seleniumDriversPool.acquire()
 
-        driverLease.use { driver ⇒
-          try {
+        val future = Future(driverLease) flatMap { driverLease ⇒
+          driverLease use { driver ⇒
             val friendsPage = userId.tpe match {
               case UserAccountId.FacebookId.FacebookIdType.AppScopedId =>
                 val scopedPageUrl = s"https://m.facebook.com/app_scoped_user_id/${userId.value}"
@@ -119,24 +119,33 @@ class SeleniumFacebookSocialServiceConnector(seleniumDriversPool: Pool[WebDriver
               }
 
               personsData map { case (id, pictureUrl, name) =>
-                PersonWithAttributes(Person(UserAccountId.FacebookId(id, UserAccountId.FacebookId.FacebookIdType.GlobalScopedId)), Seq(
+                val person = Person(UserAccountId.FacebookId(id, UserAccountId.FacebookId.FacebookIdType.GlobalScopedId), isIdentity = false)
+                val personAttributes = Seq(
                   PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, name)),
                   PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(pictureUrl))
-                ))
+                )
+
+                dataAccessManager.updateOrCreatePerson(person) flatMap { record ⇒
+                  dataAccessManager.updatePersonAttributes(record, personAttributes) map { _ ⇒
+                    PersonWithAttributes(person, personAttributes)
+                  }
+                }
               }
             }
 
             logger.info(s"${friendsList.size} relations fetched")
 
-            friendsList
-          } catch {
-            case e if NonFatal(e) =>
-              logger.error("Fetching failed", e)
-              throw e
+            Future.sequence(friendsList)
           }
         }
+
+        future onComplete { _ ⇒
+          driverLease.release()
+        }
+
+        future
       case _ =>
         throw new IllegalArgumentException("unsupported ID type")
-    })
+    }
   }
 }

@@ -16,6 +16,5 @@ class PeriodicScheduler @Inject() (system: ActorSystem, @Named("scheduler-actor"
 
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
-  system.scheduler.schedule(10.seconds, 5.second, schedulerActor, SchedulerActor.Request.UpdateNetwork)
-  system.scheduler.schedule(10.seconds, 5.second, schedulerActor, SchedulerActor.Request.UpdateInterests)
+  system.scheduler.schedule(10.seconds, 1.second, schedulerActor, SchedulerActor.Request.UpdateNetwork)
 }

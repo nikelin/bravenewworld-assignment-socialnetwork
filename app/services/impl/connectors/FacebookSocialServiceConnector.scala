@@ -40,7 +40,7 @@ class FacebookSocialServiceConnector @Inject() (config: Config, wsClient: WSClie
             accessToken
           ) map { results =>
             results.value map { result =>
-              PersonWithAttributes(Person(UserAccountId.FacebookId((result \ "id").as[String], UserAccountId.FacebookId.FacebookIdType.AppScopedId)), Seq(
+              PersonWithAttributes(Person(UserAccountId.FacebookId((result \ "id").as[String], UserAccountId.FacebookId.FacebookIdType.AppScopedId), isIdentity = false), Seq(
                 PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, (result \ "name").as[String]))
               ))
             }
@@ -58,7 +58,8 @@ class FacebookSocialServiceConnector @Inject() (config: Config, wsClient: WSClie
         val id = (response.json \ "id").as[String]
         val picture = (response.json \ "picture" \ "data" \ "url").asOpt[String]
 
-        PersonWithAttributes(Person(UserAccountId.FacebookId(id, UserAccountId.FacebookId.FacebookIdType.AppScopedId)), Seq(
+        PersonWithAttributes(Person(UserAccountId.FacebookId(id, UserAccountId.FacebookId.FacebookIdType.AppScopedId),
+          isIdentity = true), Seq(
           PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, name))
         ) ++ picture.map(p => Seq(PersonAttribute(PersonAttributeType.Photo)(PersonAttributeValue.Photo(p)))).getOrElse(Seq.empty))
       }

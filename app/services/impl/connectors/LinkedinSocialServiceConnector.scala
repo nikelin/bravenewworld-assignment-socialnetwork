@@ -41,7 +41,7 @@ class LinkedinSocialServiceConnector(config: Config, wsClient: WSClient) extends
       val pictureUrl = (response.json \ "pictureUrl").asOpt[String]
       val publicProfileUrl = (response.json \ "publicProfileUrl").as[String]
 
-      PersonWithAttributes(Person(UserAccountId.LinkedinId(id)), Seq(
+      PersonWithAttributes(Person(UserAccountId.LinkedinId(id), isIdentity = true), Seq(
         PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, firstName + " " + lastName)),
         PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.UserName.asString,
           publicProfileUrl.substring(publicProfileUrl.indexOf("/in/") + 4))))

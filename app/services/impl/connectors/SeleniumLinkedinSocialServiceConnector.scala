@@ -108,7 +108,7 @@ class SeleniumLinkedinSocialServiceConnector(config: Config, wsClient: WSClient,
                   }
 
                   PersonWithAttributes(
-                    Person(UserAccountId.LinkedinId((connection \ "memberID").as[Int].toString)),
+                    Person(UserAccountId.LinkedinId((connection \ "memberID").as[Int].toString), isIdentity = false),
                     Seq(
                       PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString,
                         (connection \ "fmt__full_name").as[String])),

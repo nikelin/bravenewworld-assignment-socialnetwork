@@ -26,6 +26,6 @@ trait RelationshipValueEstimator {
 
   def defineWeightFunction(weightFunction: RelationshipValueEstimator.WeightFunction): Unit
 
-  def process(person: Id[Person], relations: Seq[Id[Person]])(implicit ec: ExecutionContext): Future[Seq[(Id[Person], RelationshipValueEstimator.Score)]]
+  def process(person: Id[Person], relations: Seq[Id[Person]])(implicit ec: ExecutionContext): Future[Seq[(Id[Person], RelationshipValueEstimator.Score, Seq[Id[Person]])]]
 
 }

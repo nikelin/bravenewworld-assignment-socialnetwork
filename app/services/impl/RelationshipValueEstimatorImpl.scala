@@ -32,7 +32,7 @@ class RelationshipValueEstimatorImpl @Inject() (dataAccessManager: DataAccessMan
     weights += weightFunction
   }
 
-  override def process(person: Id[Person], relations: Seq[Id[Person]])(implicit ec: ExecutionContext): Future[Seq[(Id[Person], Score)]] = {
+  override def process(person: Id[Person], relations: Seq[Id[Person]])(implicit ec: ExecutionContext): Future[Seq[(Id[Person], Score, Seq[Id[Person]])]] = {
     for {
       personNetwork <- dataAccessManager.findRelationsByPersonId(person)
       personAttributes <- dataAccessManager.findPersonAttributesByPersonId(person)
@@ -53,7 +53,7 @@ class RelationshipValueEstimatorImpl @Inject() (dataAccessManager: DataAccessMan
             (score, weights.foldLeft(0d)((l, r) => l + r(score)))
           }
 
-          (relation, Score(calculatedScore, calculatedScore.map(v => v._2).sum))
+          (relation, Score(calculatedScore, calculatedScore.map(v => v._2).sum), relationNetwork map (_.id))
         }
       })
     } yield results

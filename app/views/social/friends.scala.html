@@ -1,21 +1,40 @@
 @import services.RelationshipValueEstimator
+@import java.time.Instant
 
-@(xs: Seq[(MaterializedEntity[Person], Seq[PersonAttribute], RelationshipValueEstimator.Score)])
+@import services.periodic.SchedulerActor
+@(xs: Seq[SocialRelationsController.RelationData], positionInQueue: SchedulerActor.PositionInQueue)
 <table>
     <thead>
         <tr>
             <th>Photo</th>
             <th>Friend</th>
             <th>Social Rank</th>
+            <th>Network Size</th>
+            <th>Position in Update Queue</th>
         </tr>
     </thead>
     <tbody>
         @(xs map { x =>
-            views.html.social.friendRow(x._1, x._2, x._3)
+            views.html.social.friendRow(x)
         })
         @(if(xs.isEmpty) {
             Html("""<tr>
-                <td colspan="3" style="text-align: center;">No results here. Usually, it might take us up to few minutes to finish processing your data.</td>
+                <td colspan="3" style="text-align: center;">
+                    No results here. Usually, it might take us up to few minutes to finish processing your data.
+
+                    <div>
+                        <strong>Status</strong>: """ + (positionInQueue match {
+                            case SchedulerActor.PositionInQueue.ScheduledAt(position) ⇒
+                                Html(s"You are #$position in update queue")
+                            case SchedulerActor.PositionInQueue.InActiveQueue ⇒
+                                Html(s"We are updating your profile right now!")
+                            case SchedulerActor.PositionInQueue.NotScheduled ⇒
+                                Html("You are not in update queue yet.")
+                            case SchedulerActor.PositionInQueue.ProcessedAt(time) ⇒
+                                Html(s"Your profile has been updated ${(Instant.now().toEpochMilli - time.toEpochMilli)/1000}s ago")
+                        })+ """
+                   </div>
+                </td>
             </tr>""")
         })
     </tbody>

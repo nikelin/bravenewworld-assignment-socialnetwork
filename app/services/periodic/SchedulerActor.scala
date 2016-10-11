@@ -4,6 +4,7 @@ import java.time.Instant
 import javax.inject.Inject
 
 import akka.actor.Actor
+import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import dal.DataAccessManager
 import models.{Id, MaterializedEntity, Person}
@@ -20,7 +21,7 @@ object SchedulerActor {
   private[SchedulerActor] object RequestPrivate {
     case object ExecuteNetworkUpdates extends RequestPrivate
     case class SchedulePersonUpdate(person: MaterializedEntity[Person], level: Int) extends Request
-    case class ScheduleRelationsUpdate(person: MaterializedEntity[Person]) extends Request
+    case class ScheduleRelationsUpdate(person: MaterializedEntity[Person], level: Int) extends Request
   }
 
   sealed trait Request
@@ -30,6 +31,22 @@ object SchedulerActor {
     case object UpdateWorkExperience extends Request
     case object UpdateInterests extends Request
     case object UpdateSocialActivity extends Request
+    case class RequestPositionInQueue(person: Id[Person]) extends Request
+    case class RequestPositionsInQueue(person: Seq[Id[Person]]) extends Request
+  }
+
+  sealed trait PositionInQueue
+  object PositionInQueue {
+    case object InActiveQueue extends PositionInQueue
+    case class ScheduledAt(position: Int) extends PositionInQueue
+    case class ProcessedAt(time: Instant) extends PositionInQueue
+    case object NotScheduled extends PositionInQueue
+  }
+
+  sealed trait Response
+  object Response {
+    case class PersonPositionInQueue(position: PositionInQueue)
+    case class PersonsPositionInQueue(position: Map[Id[Person], PositionInQueue])
   }
 
   case class PrioritizedPerson(person: MaterializedEntity[Person], level: Int)
@@ -38,8 +55,8 @@ object SchedulerActor {
 
 }
 
-class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors,
-                     dataAccessManager: DataAccessManager)
+class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialServiceConnectors,
+                                dataAccessManager: DataAccessManager)
   extends Actor with LazyLogging {
   import SchedulerActor._
 
@@ -49,6 +66,8 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
   private final val active = mutable.HashSet[Id[Person]]()
   private final val processed = mutable.HashMap[Id[Person], Instant]()
 
+  private final val schedulerStackSize = config.getInt("scheduler.stackSize")
+
   override def preStart(): Unit = {
     context.system.scheduler.schedule(0.seconds, 1.seconds, self, RequestPrivate.ExecuteNetworkUpdates)
   }
@@ -57,49 +76,78 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
     logger.info("Post stop")
   }
 
+  private def computePosition(person: Id[Person]): SchedulerActor.PositionInQueue = {
+    if ( active.contains(person) ) PositionInQueue.InActiveQueue
+    else {
+      queue.zipWithIndex.find(_._1.person.id == person) match {
+        case Some(scheduledPair) ⇒ PositionInQueue.ScheduledAt(scheduledPair._2)
+        case None ⇒
+          processed.zipWithIndex.find(_._1._1 == person) match {
+            case Some(processedPair) ⇒ PositionInQueue.ProcessedAt(processedPair._1._2)
+            case None ⇒ PositionInQueue.NotScheduled
+          }
+      }
+    }
+  }
+
   override def receive: Receive = {
-    case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty && active.size < 5 =>
+    case Request.RequestPositionsInQueue(persons) ⇒
+      sender() ! Response.PersonsPositionInQueue((persons map { person ⇒
+        (person, computePosition(person))
+      }).toMap)
+
+    case Request.RequestPositionInQueue(person) ⇒
+      sender() ! computePosition(person)
+
+    case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty && active.size < schedulerStackSize =>
       val record = queue.dequeue()
+
+      logger.info(s"Executing update with level ${record.level}; " +
+        s"active=${active.size}; " +
+        s"queue=${queue.size}; " +
+        s"processed=${processed.size}; ")
+
       active += record.person.id
 
       val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
         .get
 
-      (for {
-        friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
-          Future.sequence(result map { friend =>
-            dataAccessManager.updateOrCreatePerson(friend.person) flatMap { friendId =>
-              logger.info("Person created")
-              dataAccessManager.updatePersonAttributes(friendId, friend.attribute) flatMap { _ =>
-                logger.info("Person attributes updated")
-                dataAccessManager.linkRelation(record.person.id, friendId) map { _ =>
-                  logger.info("Relations updated")
-                }
+      Future {
+        (for {
+          friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
+            Future.sequence(result map { friend =>
+              dataAccessManager.findPersonByInternalId(friend.person.internalId) flatMap {
+                case Some(friendRecord) ⇒
+                  dataAccessManager.linkRelation(record.person.id, friendRecord.id) map { _ =>
+                    logger.info("Relations updated")
+                  }
+                case None ⇒
+                  Future(logger.info("Corrupted relation returned"))
               }
-            }
-          })
-        )
-      } yield {
-        logger.info(s"${friendsList.size} nodes updated/created")
-        active -= record.person.id
-        processed.put(record.person.id, Instant.now())
-      }) recover {
-        case e if NonFatal(e) =>
-          logger.error("UpdateNetwork request failed", e)
+            })
+            )
+        } yield {
+          logger.info(s"${friendsList.size} nodes updated/created")
           active -= record.person.id
           processed.put(record.person.id, Instant.now())
+        }) recover {
+          case e if NonFatal(e) =>
+            logger.error("UpdateNetwork request failed", e)
+            active -= record.person.id
+            processed.put(record.person.id, Instant.now())
+        }
       }
 
-    case RequestPrivate.ScheduleRelationsUpdate(person) =>
+    case RequestPrivate.ScheduleRelationsUpdate(person, level) =>
       dataAccessManager.findRelationsByPersonId(person.id) map { persons =>
         persons foreach { person =>
-          self ! RequestPrivate.SchedulePersonUpdate(person, 2)
+          self ! RequestPrivate.SchedulePersonUpdate(person, level + 1)
         }
       }
 
     case RequestPrivate.SchedulePersonUpdate(person, level) =>
-      val isScheduled = queue.exists(_.person.id.value == person.id.value)
-      val isActive = active.exists(_.value == person.id.value)
+      val isScheduled = queue.exists(_.person.id == person.id)
+      val isActive = active.contains(person.id)
       val isRecentlyUpdated = processed.get(person.id).exists(time =>
         Instant.now.toEpochMilli - time.toEpochMilli > 5.minutes.toMillis
       )
@@ -114,10 +162,10 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
           users map { user =>
             dataAccessManager.findPersonsByUserId(user.id) map { persons =>
               persons foreach { person =>
-                dataAccessManager.computePersonLevel(person.id) map { level =>
-                  self ! RequestPrivate.ScheduleRelationsUpdate(person)
-                  self ! RequestPrivate.SchedulePersonUpdate(person, 0)
-                }
+                val level = if(person.entity.isIdentity) 0 else 1
+
+                self ! RequestPrivate.ScheduleRelationsUpdate(person, level)
+                self ! RequestPrivate.SchedulePersonUpdate(person, level)
               }
             }
           }

@@ -37,10 +37,10 @@ object FacebookSeleniumDriversFactory {
 
   def create(config: Config): Pool[WebDriver] = {
     Pool(
-      capacity = 5,
+      capacity = config.getInt("selenium.maxTotal"),
       factory = () ⇒ activateObject(config)(AbstractSeleniumDriversFactory.create(config)),
       referenceType = ReferenceType.Strong,
-      maxIdleTime = 1.hour,
+      maxIdleTime = 30.seconds,
       reset = (p) ⇒ activateObject(config)(p),
       dispose = _.close(),
       healthCheck = _ ⇒ true

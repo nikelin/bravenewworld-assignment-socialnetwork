@@ -1,7 +1,13 @@
 @import services.RelationshipValueEstimator
-@(user: MaterializedEntity[User], applicationId: String, person: MaterializedEntity[Person],
+@import services.periodic.SchedulerActor
+@(
+        user: MaterializedEntity[User],
+        applicationId: String,
+        person: MaterializedEntity[Person],
         personAttributes: Seq[PersonAttribute],
-        relations: Seq[(MaterializedEntity[Person], Seq[PersonAttribute],  RelationshipValueEstimator.Score)])
+        relations: Seq[SocialRelationsController.RelationData],
+        positionInQueue: SchedulerActor.PositionInQueue
+)
 
 @layout(title = "Home", styles = Seq("index.css")) {
     <nav>
@@ -24,7 +30,7 @@
     </nav>
 
     <div class="Social__friends">
-        @views.html.social.friends(relations)
+        @views.html.social.friends(relations, positionInQueue)
     </div>
 
 }

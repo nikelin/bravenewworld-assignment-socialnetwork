@@ -35,7 +35,7 @@ class InstagramSocialServiceConnector @Inject() (wsClient: WSClient, config: Con
           val id = (result \ "id").as[String]
           val photo = (result \ "profile_picture").asOpt[String]
 
-          PersonWithAttributes(Person(UserAccountId.InstagramId(id)),
+          PersonWithAttributes(Person(UserAccountId.InstagramId(id), isIdentity = false),
             Seq(
               PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, name))
             ) ++ photo.map( p =>
@@ -74,7 +74,7 @@ class InstagramSocialServiceConnector @Inject() (wsClient: WSClient, config: Con
         PersonAttribute(PersonAttributeType.Text)(PersonAttributeValue.Text(PersonProfileField.Name.asString, if(name.isEmpty) userName else name))
       )
 
-      PersonWithAttributes(Person(UserAccountId.InstagramId(id)), socialAttributes ++ photoAttribute ++ basicAttributes)
+      PersonWithAttributes(Person(UserAccountId.InstagramId(id), isIdentity = true), socialAttributes ++ photoAttribute ++ basicAttributes)
     }
   }
 }

@@ -61,7 +61,7 @@ package object models {
 
   case class User(createdOn: ZonedDateTime) extends DomainEntity
 
-  case class Person(internalId: UserAccountId) extends DomainEntity
+  case class Person(internalId: UserAccountId, isIdentity: Boolean) extends DomainEntity
 
   case class UserProfile(name: String, photo: Option[String]) extends DomainEntity
 

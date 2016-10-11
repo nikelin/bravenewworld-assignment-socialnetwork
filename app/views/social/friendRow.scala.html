@@ -1,20 +1,33 @@
 @import services.RelationshipValueEstimator.Score
-@(person: MaterializedEntity[Person], attributes: Seq[PersonAttribute], score: Score)
+@import services.periodic.SchedulerActor
+@import java.time.Instant
+@(relationData: SocialRelationsController.RelationData)
 <tr>
     <td>
         @(
-            attributes.find(attr => attr.tpe == PersonAttributeType.Photo).map( photo =>
+            relationData.attributes.find(attr => attr.tpe == PersonAttributeType.Photo).map( photo =>
                 Html("<img src=\"" + photo.value.asInstanceOf[PersonAttributeValue.Photo].value + "\"/>")
             ).getOrElse(Html("No photo available"))
         )
     </td>
     <td>
         @(
-            attributes.find(attr =>
+            relationData.attributes.find(attr =>
                 attr.tpe == PersonAttributeType.Text && attr.value.asInstanceOf[PersonAttributeValue.Text].name == PersonProfileField.Name.asString
             )
             .map(_.value.asInstanceOf[PersonAttributeValue.Text].value)
         )
     </td>
-    <td>@(score.totalValue)</td>
+    <td>@(relationData.score.totalValue)</td>
+    <td>@(relationData.relations.size)</td>
+    <td>@(relationData.positionInQueue match {
+        case SchedulerActor.PositionInQueue.ProcessedAt(time) ⇒
+            Html(s"Processed ${(Instant.now().toEpochMilli - time.toEpochMilli)/1000}s ago")
+        case SchedulerActor.PositionInQueue.InActiveQueue ⇒
+            Html("Processing now")
+        case SchedulerActor.PositionInQueue.NotScheduled ⇒
+            Html("Not scheduled")
+        case SchedulerActor.PositionInQueue.ScheduledAt(position) ⇒
+            Html(s"#$position in queue")
+    })</td>
 </tr>
