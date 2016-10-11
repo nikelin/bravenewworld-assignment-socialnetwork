@@ -5,6 +5,7 @@ import javax.inject.{Inject, Named, Singleton}
 import akka.actor.ActorSystem
 import com.typesafe.config.Config
 import dal.DataAccessManager
+import io.github.andrebeat.pool.Pool
 import models.ServiceType
 import modules.AppModule
 import org.apache.commons.pool2.ObjectPool
@@ -14,9 +15,9 @@ import services.impl.connectors.{InstagramSocialServiceConnector, LinkedinSocial
 
 @Singleton
 class SocialServiceConnectors @Inject() (wsClient: WSClient,
-                                         @Named("facebook") facebookDriversPool: ObjectPool[WebDriver],
-                                         @Named("linkedin") linkedinDriversPool: ObjectPool[WebDriver],
-                                         @Named("instagram") instagramDriversPool: ObjectPool[WebDriver],
+                                         @Named("facebook") facebookDriversPool: Pool[WebDriver],
+                                         @Named("linkedin") linkedinDriversPool: Pool[WebDriver],
+                                         @Named("instagram") instagramDriversPool: Pool[WebDriver],
                                          system: ActorSystem,
                                          dataAccessManager: DataAccessManager,
                                          config: Config) {

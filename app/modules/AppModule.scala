@@ -5,6 +5,7 @@ import com.google.inject.name.Names
 import com.typesafe.config.{Config, ConfigFactory}
 import dal.DataAccessManager
 import dal.impl.DummyDataAccessManager
+import io.github.andrebeat.pool.Pool
 import org.apache.commons.pool2.ObjectPool
 import org.apache.commons.pool2.impl.{GenericObjectPool, GenericObjectPoolConfig}
 import org.openqa.selenium.WebDriver
@@ -27,21 +28,17 @@ class AppModule extends AbstractModule with AkkaGuiceSupport {
   override def configure(): Unit = {
     val config = ConfigFactory.load
 
-    val driversPoolConfig = new GenericObjectPoolConfig()
-    driversPoolConfig.setMaxTotal(config.getInt("selenium.maxTotal"))
-    driversPoolConfig.setMaxWaitMillis(1.minute.toMillis)
-
-    bind(new TypeLiteral[ObjectPool[WebDriver]] {})
+    bind(new TypeLiteral[Pool[WebDriver]] {})
       .annotatedWith(Names.named(AppModule.linkedinSeleniumDriversPool))
-      .toInstance(new GenericObjectPool(new LinkedinSeleniumDriversFactory(config), driversPoolConfig))
+      .toInstance(LinkedinSeleniumDriversFactory.create(config))
 
-    bind(new TypeLiteral[ObjectPool[WebDriver]] {})
+    bind(new TypeLiteral[Pool[WebDriver]] {})
       .annotatedWith(Names.named(AppModule.facebookSeleniumDriversPool))
-      .toInstance(new GenericObjectPool(new FacebookSeleniumDriversFactory(config), driversPoolConfig))
+      .toInstance(FacebookSeleniumDriversFactory.create(config))
 
-    bind(new TypeLiteral[ObjectPool[WebDriver]] {})
+    bind(new TypeLiteral[Pool[WebDriver]] {})
       .annotatedWith(Names.named(AppModule.instagramSeleniumDriversPool))
-      .toInstance(new GenericObjectPool(new InstagramSeleniumDriversFactory(config), driversPoolConfig))
+      .toInstance(InstagramSeleniumDriversFactory.create(config))
 
     bind(classOf[Config]).toInstance(config)
     bind(classOf[DataAccessManager]).to(classOf[DummyDataAccessManager])

@@ -93,7 +93,7 @@ class SchedulerActor @Inject() (socialServiceConnectors: SocialServiceConnectors
     case RequestPrivate.ScheduleRelationsUpdate(person) =>
       dataAccessManager.findRelationsByPersonId(person.id) map { persons =>
         persons foreach { person =>
-          self ! RequestPrivate.SchedulePersonUpdate(person, 1)
+          self ! RequestPrivate.SchedulePersonUpdate(person, 2)
         }
       }
 

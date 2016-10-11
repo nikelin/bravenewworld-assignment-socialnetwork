@@ -37,16 +37,8 @@ object AbstractSeleniumDriversFactory {
   headersTmp.put("Cookie", RequestHeaders.DYNAMIC_HEADER)
 
   val ChromeHeaders = new RequestHeaders(headersTmp)
-}
 
-abstract class AbstractSeleniumDriversFactory @Inject()(settings: Config) extends BasePooledObjectFactory[WebDriver]
-  with LazyLogging {
-
-  val userAgent: UserAgent = AbstractSeleniumDriversFactory.DesktopAgent
-
-  override def wrap(obj: WebDriver): PooledObject[WebDriver] = new DefaultPooledObject[WebDriver](obj)
-
-  override def create(): WebDriver = {
+  def create(settings: Config)(): WebDriver = {
     new JBrowserDriver(
       Settings.builder()
         .cache(true)
@@ -55,7 +47,7 @@ abstract class AbstractSeleniumDriversFactory @Inject()(settings: Config) extend
         .maxRouteConnections(100)
         .saveMedia(true)
         .requestHeaders(RequestHeaders.CHROME)
-        .userAgent(userAgent)
+        .userAgent(DesktopAgent)
         .headless(true)
         .logJavascript(true)
         .cache(true)

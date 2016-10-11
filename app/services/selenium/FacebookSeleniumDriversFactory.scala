@@ -3,35 +3,47 @@ package services.selenium
 import javax.inject.{Inject, Singleton}
 
 import com.typesafe.config.Config
+import io.github.andrebeat.pool.{Pool, ReferenceType}
 import org.apache.commons.pool2.PooledObject
 import org.openqa.selenium.{By, WebDriver}
 import org.openqa.selenium.support.ui.{ExpectedConditions, WebDriverWait}
 
-@Singleton
-class FacebookSeleniumDriversFactory @Inject()(settings: Config) extends AbstractSeleniumDriversFactory(settings) {
-  import utils._
+import scala.concurrent.duration._
 
-  override def activateObject(p: PooledObject[WebDriver]): Unit = {
-    "linkedin:clear cookies" timing { p.getObject.manage().deleteAllCookies() }
+import utils._
 
-    "initial" timing { p.getObject.get("https://m.facebook.com") }
+object FacebookSeleniumDriversFactory {
 
-    logger.info(s"Initial page loaded: ${p.getObject.getCurrentUrl}")
+  def activateObject(config: Config)(p: WebDriver): WebDriver = {
+    "linkedin:clear cookies" timing { p.manage().deleteAllCookies() }
+
+    "initial" timing { p.get("https://m.facebook.com") }
 
     val email =
-      "email" timing { new WebDriverWait(p.getObject, 15).until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("input[data-sigil='m_login_email']"))) }
+      "email" timing { new WebDriverWait(p, 15).until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("input[data-sigil='m_login_email']"))) }
 
     val pass =
-      "password" timing { new WebDriverWait(p.getObject, 15).until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("input[data-sigil='password-plain-text-toggle-input']"))) }
+      "password" timing { new WebDriverWait(p, 15).until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("input[data-sigil='password-plain-text-toggle-input']"))) }
 
-    val loginForm = p.getObject.findElement(By.cssSelector("form[data-sigil='m_login_form']"))
+    val loginForm = p.findElement(By.cssSelector("form[data-sigil='m_login_form']"))
 
-    "email:sendKeys" timing { email.sendKeys(settings.getString("oauth.facebook.botAccount.email")) }
-    "email:password" timing { pass.sendKeys(settings.getString("oauth.facebook.botAccount.password")) }
+    "email:sendKeys" timing { email.sendKeys(config.getString("oauth.facebook.botAccount.email")) }
+    "email:password" timing { pass.sendKeys(config.getString("oauth.facebook.botAccount.password")) }
 
     "form:submit" timing { loginForm.submit() }
+
+    p
   }
 
-  override def passivateObject(p: PooledObject[WebDriver]): Unit = {
+  def create(config: Config): Pool[WebDriver] = {
+    Pool(
+      capacity = 5,
+      factory = () ⇒ activateObject(config)(AbstractSeleniumDriversFactory.create(config)),
+      referenceType = ReferenceType.Strong,
+      maxIdleTime = 1.hour,
+      reset = (p) ⇒ activateObject(config)(p),
+      dispose = _.close(),
+      healthCheck = _ ⇒ true
+    )
   }
 }

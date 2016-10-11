@@ -16,9 +16,11 @@ object Dependencies {
     val jWebDriverVersion = "0.16.4"
     val gson = "2.6.2"
     val commonsPool = "2.4.2"
+    val scalaPool = "0.3.0"
   }
 
   lazy val server = Def.setting(Seq(
+    "io.github.andrebeat" %% "scala-pool" % Versions.scalaPool,
     "org.apache.commons" % "commons-pool2" % Versions.commonsPool % Compile,
     "org.seleniumhq.selenium" % "selenium-htmlunit-driver" % "2.52.0" % Compile,
     "com.google.code.gson" % "gson" % Versions.gson % Compile,
