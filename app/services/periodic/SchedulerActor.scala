@@ -97,7 +97,7 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
       }).toMap)
 
     case Request.RequestPositionInQueue(person) ⇒
-      sender() ! computePosition(person)
+      sender() ! Response.PersonPositionInQueue(computePosition(person))
 
     case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty && active.size < schedulerStackSize =>
       val record = queue.dequeue()
