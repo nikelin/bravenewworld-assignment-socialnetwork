@@ -49,7 +49,6 @@ class SeleniumFacebookSocialServiceConnector(seleniumDriversPool: Pool[WebDriver
             val friendsPage = userId.tpe match {
               case UserAccountId.FacebookId.FacebookIdType.AppScopedId =>
                 val scopedPageUrl = s"https://m.facebook.com/app_scoped_user_id/${userId.value}"
-                logger.info("Resolving scoped ID", scopedPageUrl)
                 driver.get(scopedPageUrl)
 
                 val idToken = "id="
@@ -89,7 +88,7 @@ class SeleniumFacebookSocialServiceConnector(seleniumDriversPool: Pool[WebDriver
                 jsExecutor.executeScript("window.scrollTo(0, document.body.offsetHeight)")
                 prevOffset = newOffset
                 newOffset = jsExecutor.executeScript("return window.scrollY").asInstanceOf[Long]
-                Thread.sleep(1.seconds.toMillis)
+                Thread.sleep(2.seconds.toMillis)
               }
             }
 

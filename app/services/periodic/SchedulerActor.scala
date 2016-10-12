@@ -10,6 +10,8 @@ import dal.DataAccessManager
 import models.{Id, MaterializedEntity, Person}
 import services.oauth.SocialServiceConnectors
 
+import utils._
+
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -92,84 +94,94 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
 
   override def receive: Receive = {
     case Request.RequestPositionsInQueue(persons) ⇒
-      sender() ! Response.PersonsPositionInQueue((persons map { person ⇒
-        (person, computePosition(person))
-      }).toMap)
+      "positions queue" timing {
+        sender() ! Response.PersonsPositionInQueue((persons map { person ⇒
+          (person, computePosition(person))
+        }).toMap)
+      }
 
     case Request.RequestPositionInQueue(person) ⇒
       sender() ! Response.PersonPositionInQueue(computePosition(person))
 
     case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty && active.size < schedulerStackSize =>
-      val record = queue.dequeue()
+      "execute network updates" timing {
+        val record = queue.dequeue()
 
-      logger.info(s"Executing update with level ${record.level}; " +
-        s"active=${active.size}; " +
-        s"queue=${queue.size}; " +
-        s"processed=${processed.size}; ")
+        logger.info(s"Executing update with level ${record.level}; " +
+          s"active=${active.size}; " +
+          s"queue=${queue.size}; " +
+          s"processed=${processed.size}; ")
 
-      active += record.person.id
+        active += record.person.id
 
-      val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
-        .get
+        val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
+          .get
 
-      Future {
-        (for {
-          friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
-            Future.sequence(result map { friend =>
-              dataAccessManager.findPersonByInternalId(friend.person.internalId) flatMap {
-                case Some(friendRecord) ⇒
-                  dataAccessManager.linkRelation(record.person.id, friendRecord.id) map { _ =>
-                    logger.info("Relations updated")
-                  }
-                case None ⇒
-                  Future(logger.info("Corrupted relation returned"))
-              }
-            })
-            )
-        } yield {
-          logger.info(s"${friendsList.size} nodes updated/created")
-          active -= record.person.id
-          processed.put(record.person.id, Instant.now())
-        }) recover {
-          case e if NonFatal(e) =>
-            logger.error("UpdateNetwork request failed", e)
+        Future {
+          (for {
+            friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
+              Future.sequence(result map { friend =>
+                dataAccessManager.findPersonByInternalId(friend.person.internalId) flatMap {
+                  case Some(friendRecord) ⇒
+                    dataAccessManager.linkRelation(record.person.id, friendRecord.id) map { _ =>
+                      logger.info("Relations updated")
+                    }
+                  case None ⇒
+                    Future(logger.info("Corrupted relation returned"))
+                }
+              })
+              )
+          } yield {
+            logger.info(s"${friendsList.size} nodes updated/created")
             active -= record.person.id
             processed.put(record.person.id, Instant.now())
+          }) recover {
+            case e if NonFatal(e) =>
+              logger.error("UpdateNetwork request failed", e)
+              active -= record.person.id
+              processed.put(record.person.id, Instant.now())
+          }
         }
       }
 
     case RequestPrivate.ScheduleRelationsUpdate(person, level) =>
-      dataAccessManager.findRelationsByPersonId(person.id) map { persons =>
-        persons foreach { person =>
-          self ! RequestPrivate.SchedulePersonUpdate(person, level + 1)
+      "relations update" timing {
+        dataAccessManager.findRelationsByPersonId(person.id) map { persons =>
+          persons foreach { person =>
+            self ! RequestPrivate.SchedulePersonUpdate(person, level + 1)
+          }
         }
       }
 
     case RequestPrivate.SchedulePersonUpdate(person, level) =>
-      val isScheduled = queue.exists(_.person.id == person.id)
-      val isActive = active.contains(person.id)
-      val isRecentlyUpdated = processed.get(person.id).exists(time =>
-        Instant.now.toEpochMilli - time.toEpochMilli > 5.minutes.toMillis
-      )
+      "person update schedule" timing {
+        val isScheduled = queue.exists(_.person.id == person.id)
+        val isActive = active.contains(person.id)
+        val isRecentlyUpdated = processed.find(_._1.value == person.id.value).exists { case (_, time) =>
+          Instant.now.toEpochMilli - time.toEpochMilli < 5.hours.toMillis
+        }
 
-      if (!isScheduled && !isActive && !isRecentlyUpdated) {
-        queue += PrioritizedPerson(person, level)
+        if (!isScheduled && !isActive && !isRecentlyUpdated) {
+          queue += PrioritizedPerson(person, level)
+        }
       }
 
     case Request.UpdateNetwork =>
-      dataAccessManager.findAllUsers() flatMap { users =>
-        Future.sequence(
-          users map { user =>
-            dataAccessManager.findPersonsByUserId(user.id) map { persons =>
-              persons foreach { person =>
-                val level = if(person.entity.isIdentity) 0 else 1
+      "update network" timing {
+        dataAccessManager.findAllUsers() flatMap { users =>
+          Future.sequence(
+            users map { user =>
+              dataAccessManager.findPersonsByUserId(user.id) map { persons =>
+                persons foreach { person =>
+                  val level = if (person.entity.isIdentity) 0 else 1
 
-                self ! RequestPrivate.ScheduleRelationsUpdate(person, level)
-                self ! RequestPrivate.SchedulePersonUpdate(person, level)
+                  self ! RequestPrivate.ScheduleRelationsUpdate(person, level)
+                  self ! RequestPrivate.SchedulePersonUpdate(person, level)
+                }
               }
             }
-          }
-        )
+          )
+        }
       }
 
     case Request.UpdateInterests =>
@@ -191,9 +203,9 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
       }
 
     case e: Request =>
-      logger.info(s"Unsupported or unacceptable request received $e")
+//      logger.info(s"Unsupported or unacceptable request received $e")
     case e: RequestPrivate =>
-      logger.info(s"Unsupported or unacceptable request received $e")
+//      logger.info(s"Unsupported or unacceptable request received $e")
     case e: Any => logger.error(s"Unknown message received $e")
   }
 

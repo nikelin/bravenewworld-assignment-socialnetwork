@@ -16,6 +16,8 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
+import utils._
+
 object SocialRelationsController {
   case class RelationData(
       person: MaterializedEntity[Person],
@@ -31,7 +33,7 @@ class SocialRelationsController @Inject() (dataAccessManager: DataAccessManager,
                                            @Named("scheduler-actor") schedulerActorRef: ActorRef)
   extends Controller {
 
-  implicit val ec: ExecutionContext = play.api.libs.concurrent.Execution.Implicits.defaultContext
+  implicit val ec: ExecutionContext = ExecutionContext.global
 
   implicit val timeout: Timeout = Timeout(20.second)
 
@@ -65,11 +67,11 @@ class SocialRelationsController @Inject() (dataAccessManager: DataAccessManager,
                     map.getOrElse(rel._1.id, SchedulerActor.PositionInQueue.NotScheduled))
                 }
               case _ ⇒ throw new IllegalStateException()
-            }
+            } timing "friend priorities"
         placeInQueue ← schedulerActorRef.ask(SchedulerActor.Request.RequestPositionInQueue(person.id)) map {
           case SchedulerActor.Response.PersonPositionInQueue(p) ⇒ p
           case _ ⇒ SchedulerActor.PositionInQueue.NotScheduled
-        }
+        } timing "self priority"
       } yield {
         Ok(
           views.html.social.main(user, applicationId, person,
