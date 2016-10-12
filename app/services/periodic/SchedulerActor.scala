@@ -154,34 +154,30 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
       }
 
     case RequestPrivate.SchedulePersonUpdate(person, level) =>
-      "person update schedule" timing {
-        val isScheduled = queue.exists(_.person.id == person.id)
-        val isActive = active.contains(person.id)
-        val isRecentlyUpdated = processed.find(_._1.value == person.id.value).exists { case (_, time) =>
-          Instant.now.toEpochMilli - time.toEpochMilli < 5.hours.toMillis
-        }
+      val isScheduled = queue.exists(_.person.id == person.id)
+      val isActive = active.contains(person.id)
+      val isRecentlyUpdated = processed.find(_._1.value == person.id.value).exists { case (_, time) =>
+        Instant.now.toEpochMilli - time.toEpochMilli < 5.hours.toMillis
+      }
 
-        if (!isScheduled && !isActive && !isRecentlyUpdated) {
-          queue += PrioritizedPerson(person, level)
-        }
+      if (!isScheduled && !isActive && !isRecentlyUpdated) {
+        queue += PrioritizedPerson(person, level)
       }
 
     case Request.UpdateNetwork =>
-      "update network" timing {
-        dataAccessManager.findAllUsers() flatMap { users =>
-          Future.sequence(
-            users map { user =>
-              dataAccessManager.findPersonsByUserId(user.id) map { persons =>
-                persons foreach { person =>
-                  val level = if (person.entity.isIdentity) 0 else 1
+      dataAccessManager.findAllUsers() flatMap { users =>
+        Future.sequence(
+          users map { user =>
+            dataAccessManager.findPersonsByUserId(user.id) map { persons =>
+              persons foreach { person =>
+                val level = if (person.entity.isIdentity) 0 else 1
 
-                  self ! RequestPrivate.ScheduleRelationsUpdate(person, level)
-                  self ! RequestPrivate.SchedulePersonUpdate(person, level)
-                }
+                self ! RequestPrivate.ScheduleRelationsUpdate(person, level)
+                self ! RequestPrivate.SchedulePersonUpdate(person, level)
               }
             }
-          )
-        }
+          }
+        )
       }
 
     case Request.UpdateInterests =>
