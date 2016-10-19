@@ -38,7 +38,7 @@ object LinkedinSeleniumDriversFactory {
 
   def create(config: Config): Pool[WebDriver] = {
     Pool(
-      capacity = 5,
+      capacity = 1,
       factory = () ⇒ activateObject(config)(AbstractSeleniumDriversFactory.create(config)),
       referenceType = ReferenceType.Strong,
       maxIdleTime = 1.hour,

@@ -15,7 +15,7 @@ object InstagramSeleniumDriversFactory {
 
   def create(config: Config): Pool[WebDriver] = {
     Pool(
-      capacity = 5,
+      capacity = 1,
       factory = AbstractSeleniumDriversFactory.create(config),
       referenceType = ReferenceType.Strong,
       maxIdleTime = 1.hour,

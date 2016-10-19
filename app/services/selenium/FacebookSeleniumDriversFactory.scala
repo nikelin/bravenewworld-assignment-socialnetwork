@@ -40,7 +40,7 @@ object FacebookSeleniumDriversFactory {
       capacity = config.getInt("selenium.maxTotal"),
       factory = () ⇒ activateObject(config)(AbstractSeleniumDriversFactory.create(config)),
       referenceType = ReferenceType.Strong,
-      maxIdleTime = 30.seconds,
+      maxIdleTime = 5.days,
       reset = (p) ⇒ activateObject(config)(p),
       dispose = _.close(),
       healthCheck = _ ⇒ true
