@@ -14,6 +14,7 @@ object RelationshipValueEstimatorImpl {
 
   final val defaultWeightFunction: RelationshipValueEstimator.WeightFunction = {
     case ScoreFactor.ShareNetwork(count) => count
+    case ScoreFactor.SizeOfNetwork(count) => count * 0.1
     case ScoreFactor.ShareInterests(count) => count * 0.75
     case _ => 0
   }
@@ -44,10 +45,11 @@ class RelationshipValueEstimatorImpl @Inject() (dataAccessManager: DataAccessMan
           val sharedAttributes = personAttributes.intersect(relationAttributes)
 
           val sharedNetworkScore = ScoreFactor.ShareNetwork(personNetwork.map(_.entity.internalId.asString).intersect(relationNetwork.map(_.entity.internalId.asString)).size)
+          val sizeOfNetworkScore = ScoreFactor.SizeOfNetwork(relationNetwork.size)
           val sharedInterests = ScoreFactor.ShareInterests(sharedAttributes.count(_.tpe == PersonAttributeType.Interest))
           val sharedWorkExperience = ScoreFactor.ShareWorkPlaces(sharedAttributes.count(_.tpe == PersonAttributeType.WorkExperience))
 
-          val scores = Seq(sharedNetworkScore, sharedInterests, sharedWorkExperience)
+          val scores = Seq(sizeOfNetworkScore, sharedNetworkScore, sharedInterests, sharedWorkExperience)
 
           val calculatedScore = scores map { score =>
             (score, weights.foldLeft(0d)((l, r) => l + r(score)))

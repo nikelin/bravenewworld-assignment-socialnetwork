@@ -18,7 +18,7 @@
             .map(_.value.asInstanceOf[PersonAttributeValue.Text].value)
         )
     </td>
-    <td>@(relationData.score.totalValue)</td>
+    <td>@(java.text.NumberFormat.getInstance.format(relationData.score.totalValue))</td>
     <td>@(relationData.relations.size)</td>
     <td>@(relationData.positionInQueue match {
         case SchedulerActor.PositionInQueue.ProcessedAt(time) ⇒

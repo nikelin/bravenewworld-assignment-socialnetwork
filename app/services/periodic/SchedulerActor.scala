@@ -9,18 +9,19 @@ import com.typesafe.scalalogging.LazyLogging
 import dal.DataAccessManager
 import models.{Id, MaterializedEntity, Person}
 import services.oauth.SocialServiceConnectors
-
 import utils._
 
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
 object SchedulerActor {
 
   private[SchedulerActor] sealed trait RequestPrivate
   private[SchedulerActor] object RequestPrivate {
+    case object InvalidateActive extends RequestPrivate
     case object ExecuteNetworkUpdates extends RequestPrivate
     case class SchedulePersonUpdate(person: MaterializedEntity[Person], level: Int) extends Request
     case class ScheduleRelationsUpdate(person: MaterializedEntity[Person], level: Int) extends Request
@@ -66,12 +67,16 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
 
   private final val queue = mutable.PriorityQueue[PrioritizedPerson]()
   private final val active = mutable.HashSet[Id[Person]]()
+  private final val activeMap = mutable.HashMap[Id[Person], Instant]()
   private final val processed = mutable.HashMap[Id[Person], Instant]()
 
   private final val schedulerStackSize = config.getInt("scheduler.stackSize")
+  private final val schedulerTimeout = config.getDuration("scheduler.processingTimeout")
 
   override def preStart(): Unit = {
     context.system.scheduler.schedule(0.seconds, 1.seconds, self, RequestPrivate.ExecuteNetworkUpdates)
+    context.system.scheduler.schedule(0.seconds, 1.seconds, self, Request.UpdateNetwork)
+    context.system.scheduler.schedule(0.seconds, 1.seconds, self, RequestPrivate.InvalidateActive)
   }
 
   override def postStop(): Unit = {
@@ -103,21 +108,39 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
     case Request.RequestPositionInQueue(person) ⇒
       sender() ! Response.PersonPositionInQueue(computePosition(person))
 
+    case RequestPrivate.InvalidateActive if active.nonEmpty ⇒
+      "active entries invalidation" timing {
+        val items = active filter { entry ⇒
+          activeMap.get(entry)
+            .exists { time ⇒
+              Instant.now().minusMillis(time.toEpochMilli).toEpochMilli > schedulerTimeout.toMillis
+            }
+        } map { expired ⇒
+          active -= expired
+          activeMap -= expired
+          processed += expired → Instant.now
+          expired
+        }
+
+        logger.info(s"$items evicted from the active queue")
+      }
+
     case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty && active.size < schedulerStackSize =>
       "execute network updates" timing {
-        val record = queue.dequeue()
-
-        logger.info(s"Executing update with level ${record.level}; " +
-          s"active=${active.size}; " +
-          s"queue=${queue.size}; " +
-          s"processed=${processed.size}; ")
-
-        active += record.person.id
-
-        val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
-          .get
-
         Future {
+          val record = queue.dequeue()
+
+          logger.info(s"Executing update with level ${record.level}; " +
+            s"active=${active.size}; " +
+            s"queue=${queue.size}; " +
+            s"processed=${processed.size}; ")
+
+          active += record.person.id
+          activeMap += record.person.id → Instant.now
+
+          val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
+            .get
+
           (for {
             friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
               Future.sequence(result map { friend =>
@@ -140,6 +163,14 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
               logger.error("UpdateNetwork request failed", e)
               active -= record.person.id
               processed.put(record.person.id, Instant.now())
+          } onComplete { e ⇒
+            active -= record.person.id
+            processed.put(record.person.id, Instant.now())
+
+            e match {
+              case Success(_) ⇒ logger.info("UpdateNetwork complete")
+              case Failure(e) ⇒ logger.error("UpdateNetwork failed", e)
+            }
           }
         }
       }
