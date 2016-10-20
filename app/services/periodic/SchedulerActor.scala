@@ -127,51 +127,47 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
       }
 
     case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty && active.size < schedulerStackSize =>
-      "execute network updates" timing {
-        Future {
-          val record = queue.dequeue()
+      "execute network updates" timing Future {
+        val record = queue.dequeue()
 
-          logger.info(s"Executing update with level ${record.level}; " +
-            s"active=${active.size}; " +
-            s"queue=${queue.size}; " +
-            s"processed=${processed.size}; ")
+        logger.info(s"Executing update with level ${record.level}; " +
+          s"active=${active.size}; " +
+          s"queue=${queue.size}; " +
+          s"processed=${processed.size}; ")
 
-          active += record.person.id
-          activeMap += record.person.id → Instant.now
+        active += record.person.id
+        activeMap += record.person.id → Instant.now
 
-          val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
-            .get
+        val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
+          .get
 
-          (for {
-            friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
-              Future.sequence(result map { friend =>
-                dataAccessManager.findPersonByInternalId(friend.person.internalId) flatMap {
-                  case Some(friendRecord) ⇒
-                    dataAccessManager.linkRelation(record.person.id, friendRecord.id) map { _ =>
-                      logger.info("Relations updated")
-                    }
-                  case None ⇒
-                    Future(logger.info("Corrupted relation returned"))
-                }
-              })
-              )
-          } yield {
-            logger.info(s"${friendsList.size} nodes updated/created")
+        (for {
+          friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
+            Future.sequence(result map { friend =>
+              dataAccessManager.findPersonByInternalId(friend.person.internalId) flatMap {
+                case Some(friendRecord) ⇒
+                  dataAccessManager.linkRelation(record.person.id, friendRecord.id)
+                case None ⇒
+                  Future(logger.info("Corrupted relation returned"))
+              }
+            })
+            )
+        } yield {
+          logger.info(s"${friendsList.size} nodes updated/created")
+          active -= record.person.id
+          processed.put(record.person.id, Instant.now())
+        }) recover {
+          case e if NonFatal(e) =>
+            logger.error("UpdateNetwork request failed", e)
             active -= record.person.id
             processed.put(record.person.id, Instant.now())
-          }) recover {
-            case e if NonFatal(e) =>
-              logger.error("UpdateNetwork request failed", e)
-              active -= record.person.id
-              processed.put(record.person.id, Instant.now())
-          } onComplete { e ⇒
-            active -= record.person.id
-            processed.put(record.person.id, Instant.now())
+        } onComplete { e ⇒
+          active -= record.person.id
+          processed.put(record.person.id, Instant.now())
 
-            e match {
-              case Success(_) ⇒ logger.info("UpdateNetwork complete")
-              case Failure(e) ⇒ logger.error("UpdateNetwork failed", e)
-            }
+          e match {
+            case Success(_) ⇒ logger.info("UpdateNetwork complete")
+            case Failure(e) ⇒ logger.error("UpdateNetwork failed", e)
           }
         }
       }
@@ -231,9 +227,9 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
       }
 
     case e: Request =>
-//      logger.info(s"Unsupported or unacceptable request received $e")
+    //      logger.info(s"Unsupported or unacceptable request received $e")
     case e: RequestPrivate =>
-//      logger.info(s"Unsupported or unacceptable request received $e")
+    //      logger.info(s"Unsupported or unacceptable request received $e")
     case e: Any => logger.error(s"Unknown message received $e")
   }
 
