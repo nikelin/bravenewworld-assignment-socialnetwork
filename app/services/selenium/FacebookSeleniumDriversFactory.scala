@@ -38,17 +38,21 @@ object FacebookSeleniumDriversFactory extends LazyLogging {
       capacity = config.getInt("selenium.maxTotal"),
       factory = () ⇒ activateObject(config)(AbstractSeleniumDriversFactory.create(config)),
       referenceType = ReferenceType.Strong,
-      maxIdleTime = 5.days,
       reset = (p) ⇒ {
-        logger.info("Resetting instance")
-        p.asInstanceOf[JBrowserDriver].reset()
-        activateObject(config)(p)
+        try {
+          activateObject(config)(p)
+        } catch {
+          case e: Throwable ⇒ logger.error("Activation failed", e)
+        }
       },
       dispose = p ⇒ {
-        logger.info("Disposing instant")
-        p.close()
+        try {
+          p.asInstanceOf[JBrowserDriver].reset()
+        } catch {
+          case e: Throwable ⇒ logger.error("Dispose failed", e)
+        }
       },
-      healthCheck = _ ⇒ true
+      healthCheck = _ ⇒ false
     )
   }
 }

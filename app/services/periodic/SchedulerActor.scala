@@ -13,7 +13,7 @@ import services.oauth.SocialServiceConnectors
 import utils._
 
 import scala.collection.mutable
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
@@ -148,32 +148,34 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
           val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
             .get
 
-          (for {
-            friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
-              Future.sequence(result map { friend =>
-                dataAccessManager.findPersonByInternalId(friend.person.internalId) flatMap {
-                  case Some(friendRecord) ⇒
-                    dataAccessManager.linkRelation(record.person.id, friendRecord.id)
-                  case None ⇒
-                    Future(logger.info("Corrupted relation returned"))
-                }
-              })
-              )
-          } yield {
-            logger.info(s"${friendsList.size} nodes updated/created")
-            active -= record.person.id
-            processed.put(record.person.id, Instant.now())
-          }) recover {
-            case e if NonFatal(e) =>
-              logger.error("UpdateNetwork request failed", e)
-              active -= record.person.id
-              processed.put(record.person.id, Instant.now())
+          Future {
+            Await.ready(
+              (for {
+                friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
+                  Future.sequence(result map { friend =>
+                    dataAccessManager.findPersonByInternalId(friend.person.internalId) flatMap {
+                      case Some(friendRecord) ⇒
+                        dataAccessManager.linkRelation(record.person.id, friendRecord.id)
+                      case None ⇒
+                        Future(logger.info("Corrupted relation returned"))
+                    }
+                  })
+                  )
+              } yield {
+                logger.info(s"${friendsList.size} nodes updated/created")
+              }) recover {
+                case e if NonFatal(e) =>
+                  logger.error("UpdateNetwork request failed", e)
+              },
+              3.minutes
+            )
           } onComplete { e ⇒
             active -= record.person.id
-            processed.put(record.person.id, Instant.now())
-
             e match {
-              case Success(_) ⇒ logger.info("UpdateNetwork complete")
+              case Success(_) ⇒
+                logger.info("UpdateNetwork complete")
+                processed.put(record.person.id, Instant.now())
+
               case Failure(e) ⇒ logger.error("UpdateNetwork failed", e)
             }
           }

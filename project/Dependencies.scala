@@ -13,7 +13,7 @@ object Dependencies {
     val upickleVersion = "0.4.0"
     val jcodec = "0.1.9"
     val seleniumVersion = "2.53.0"
-    val jWebDriverVersion = "0.16.4"
+    val jWebDriverVersion = "0.17.0"
     val gson = "2.6.2"
     val commonsPool = "2.4.2"
     val scalaPool = "0.3.0"
@@ -22,7 +22,6 @@ object Dependencies {
   lazy val server = Def.setting(Seq(
     "io.github.andrebeat" %% "scala-pool" % Versions.scalaPool,
     "org.apache.commons" % "commons-pool2" % Versions.commonsPool % Compile,
-    "org.seleniumhq.selenium" % "selenium-htmlunit-driver" % "2.52.0" % Compile,
     "com.google.code.gson" % "gson" % Versions.gson % Compile,
     "com.machinepublishers" % "jbrowserdriver" % Versions.jWebDriverVersion % Compile,
     "org.seleniumhq.selenium" % "selenium-server" % Versions.seleniumVersion % Compile,
