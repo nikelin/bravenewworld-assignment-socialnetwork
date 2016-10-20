@@ -3,7 +3,8 @@ package services.periodic
 import java.time.Instant
 import javax.inject.Inject
 
-import akka.actor.Actor
+import akka.actor.SupervisorStrategy.Restart
+import akka.actor.{Actor, OneForOneStrategy}
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
 import dal.DataAccessManager
@@ -74,6 +75,11 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
   private final val schedulerTimeout = config.getDuration("scheduler.processingTimeout")
   private final val schedulerRefreshTime = config.getDuration("scheduler.refreshTime")
 
+  override val supervisorStrategy =
+    OneForOneStrategy(maxNrOfRetries = 25, withinTimeRange = 10.minute) {
+      case e: Throwable => Restart
+    }
+
   override def preStart(): Unit = {
     context.system.scheduler.schedule(0.seconds, 1.seconds, self, RequestPrivate.ExecuteNetworkUpdates)
     context.system.scheduler.schedule(0.seconds, 1.seconds, self, Request.UpdateNetwork)
@@ -126,50 +132,56 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
         logger.info(s"$items evicted from the active queue")
       }
 
-    case RequestPrivate.ExecuteNetworkUpdates if queue.nonEmpty && active.size < schedulerStackSize =>
-      "execute network updates" timing Future {
-        val record = queue.dequeue()
+    case RequestPrivate.ExecuteNetworkUpdates =>
+      logger.info(s"Executing update, " +
+        s"active=${active.size}; " +
+        s"queue=${queue.size}; " +
+        s"processed=${processed.size}; ")
 
-        logger.info(s"Executing update with level ${record.level}; " +
-          s"active=${active.size}; " +
-          s"queue=${queue.size}; " +
-          s"processed=${processed.size}; ")
+      if (queue.nonEmpty && active.size < schedulerStackSize) {
+        "execute network updates" timing Future {
+          val record = queue.dequeue()
 
-        active += record.person.id
-        activeMap += record.person.id → Instant.now
+          active += record.person.id
+          activeMap += record.person.id → Instant.now
 
-        val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
-          .get
+          val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
+            .get
 
-        (for {
-          friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
-            Future.sequence(result map { friend =>
-              dataAccessManager.findPersonByInternalId(friend.person.internalId) flatMap {
-                case Some(friendRecord) ⇒
-                  dataAccessManager.linkRelation(record.person.id, friendRecord.id)
-                case None ⇒
-                  Future(logger.info("Corrupted relation returned"))
-              }
-            })
-            )
-        } yield {
-          logger.info(s"${friendsList.size} nodes updated/created")
-          active -= record.person.id
-          processed.put(record.person.id, Instant.now())
-        }) recover {
-          case e if NonFatal(e) =>
-            logger.error("UpdateNetwork request failed", e)
+          (for {
+            friendsList <- connector.requestFriendsList(None, record.person.entity.internalId) flatMap (result =>
+              Future.sequence(result map { friend =>
+                dataAccessManager.findPersonByInternalId(friend.person.internalId) flatMap {
+                  case Some(friendRecord) ⇒
+                    dataAccessManager.linkRelation(record.person.id, friendRecord.id)
+                  case None ⇒
+                    Future(logger.info("Corrupted relation returned"))
+                }
+              })
+              )
+          } yield {
+            logger.info(s"${friendsList.size} nodes updated/created")
             active -= record.person.id
             processed.put(record.person.id, Instant.now())
-        } onComplete { e ⇒
-          active -= record.person.id
-          processed.put(record.person.id, Instant.now())
+          }) recover {
+            case e if NonFatal(e) =>
+              logger.error("UpdateNetwork request failed", e)
+              active -= record.person.id
+              processed.put(record.person.id, Instant.now())
+          } onComplete { e ⇒
+            active -= record.person.id
+            processed.put(record.person.id, Instant.now())
 
-          e match {
-            case Success(_) ⇒ logger.info("UpdateNetwork complete")
-            case Failure(e) ⇒ logger.error("UpdateNetwork failed", e)
+            e match {
+              case Success(_) ⇒ logger.info("UpdateNetwork complete")
+              case Failure(e) ⇒ logger.error("UpdateNetwork failed", e)
+            }
           }
         }
+      } else if (queue.isEmpty) {
+        logger.info("Unable to schedule new tasks - tasks queue is empty")
+      } else {
+        logger.info("Unable to schedule new tasks - no slot available in stack")
       }
 
     case RequestPrivate.ScheduleRelationsUpdate(person, level) =>
