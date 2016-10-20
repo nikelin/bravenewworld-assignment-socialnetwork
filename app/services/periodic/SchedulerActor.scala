@@ -72,6 +72,7 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
 
   private final val schedulerStackSize = config.getInt("scheduler.stackSize")
   private final val schedulerTimeout = config.getDuration("scheduler.processingTimeout")
+  private final val schedulerRefreshTime = config.getDuration("scheduler.refreshTime")
 
   override def preStart(): Unit = {
     context.system.scheduler.schedule(0.seconds, 1.seconds, self, RequestPrivate.ExecuteNetworkUpdates)
@@ -188,7 +189,7 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
       val isScheduled = queue.exists(_.person.id == person.id)
       val isActive = active.contains(person.id)
       val isRecentlyUpdated = processed.find(_._1.value == person.id.value).exists { case (_, time) =>
-        Instant.now.toEpochMilli - time.toEpochMilli < 5.hours.toMillis
+        Instant.now.toEpochMilli - time.toEpochMilli < schedulerRefreshTime.toMillis
       }
 
       if (!isScheduled && !isActive && !isRecentlyUpdated) {
