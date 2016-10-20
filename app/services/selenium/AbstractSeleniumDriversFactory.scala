@@ -41,7 +41,9 @@ object AbstractSeleniumDriversFactory {
   def create(settings: Config)(): WebDriver = {
     new JBrowserDriver(
       Settings.builder()
-        .cache(false)
+        .cache(true)
+        .userDataDirectory(new File(settings.getString("selenium.userDataPath")))
+        .cacheDir(new File(settings.getString("selenium.userCachePath")))
         .maxRouteConnections(8)
         .requestHeaders(RequestHeaders.CHROME)
         .userAgent(DesktopAgent)
@@ -51,7 +53,6 @@ object AbstractSeleniumDriversFactory {
         .processes(1)
         .logWarnings(false)
         .blockAds(true)
-          .csrf()
         .timezone(Timezone.AMERICA_NEWYORK)
         .build()
     )
