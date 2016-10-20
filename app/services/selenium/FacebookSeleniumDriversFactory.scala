@@ -40,6 +40,7 @@ object FacebookSeleniumDriversFactory extends LazyLogging {
       referenceType = ReferenceType.Strong,
       reset = (p) ⇒ {
         try {
+          p.asInstanceOf[JBrowserDriver].reset()
           activateObject(config)(p)
         } catch {
           case e: Throwable ⇒ logger.error("Activation failed", e)
@@ -47,7 +48,7 @@ object FacebookSeleniumDriversFactory extends LazyLogging {
       },
       dispose = p ⇒ {
         try {
-          p.asInstanceOf[JBrowserDriver].reset()
+          p.asInstanceOf[JBrowserDriver].quit()
         } catch {
           case e: Throwable ⇒ logger.error("Dispose failed", e)
         }
