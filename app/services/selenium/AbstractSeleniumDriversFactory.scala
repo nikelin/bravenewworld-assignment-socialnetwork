@@ -54,7 +54,7 @@ object AbstractSeleniumDriversFactory {
         .maxConnections(100)
         .quickRender(true)
         .hostnameVerification(false)
-        .processes(settings.getInt("selenium.maxTotal") * 3)
+        .processes(settings.getInt("selenium.maxTotal") * 1)
         .blockAds(true)
         .timezone(Timezone.AMERICA_NEWYORK)
         .build()

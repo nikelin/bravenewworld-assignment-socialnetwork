@@ -1,18 +1,16 @@
 package services.selenium
 
-import javax.inject.{Inject, Singleton}
-
+import com.machinepublishers.jbrowserdriver.JBrowserDriver
 import com.typesafe.config.Config
+import com.typesafe.scalalogging.LazyLogging
 import io.github.andrebeat.pool.{Pool, ReferenceType}
-import org.apache.commons.pool2.PooledObject
 import org.openqa.selenium.{By, WebDriver}
 import org.openqa.selenium.support.ui.{ExpectedConditions, WebDriverWait}
 
 import scala.concurrent.duration._
-
 import utils._
 
-object FacebookSeleniumDriversFactory {
+object FacebookSeleniumDriversFactory extends LazyLogging {
 
   def activateObject(config: Config)(p: WebDriver): WebDriver = {
     "linkedin:clear cookies" timing { p.manage().deleteAllCookies() }
@@ -41,8 +39,15 @@ object FacebookSeleniumDriversFactory {
       factory = () ⇒ activateObject(config)(AbstractSeleniumDriversFactory.create(config)),
       referenceType = ReferenceType.Strong,
       maxIdleTime = 5.days,
-      reset = (p) ⇒ activateObject(config)(p),
-      dispose = _.close(),
+      reset = (p) ⇒ {
+        logger.info("Resetting instance")
+        p.asInstanceOf[JBrowserDriver].reset()
+        activateObject(config)(p)
+      },
+      dispose = p ⇒ {
+        logger.info("Disposing instant")
+        p.close()
+      },
       healthCheck = _ ⇒ true
     )
   }

@@ -139,6 +139,7 @@ class SeleniumFacebookSocialServiceConnector(seleniumDriversPool: Pool[WebDriver
         }
 
         future onComplete { _ ⇒
+          logger.info("Driver released")
           driverLease.release()
         }
 
