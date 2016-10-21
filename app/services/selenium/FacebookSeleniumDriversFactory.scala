@@ -1,5 +1,7 @@
 package services.selenium
 
+import java.util.concurrent.TimeUnit
+
 import com.machinepublishers.jbrowserdriver.JBrowserDriver
 import com.typesafe.config.Config
 import com.typesafe.scalalogging.LazyLogging
@@ -10,18 +12,25 @@ import org.openqa.selenium.support.ui.{ExpectedConditions, WebDriverWait}
 import scala.concurrent.duration._
 import utils._
 
+import scala.concurrent.{Await, ExecutionContext, Future}
+
 object FacebookSeleniumDriversFactory extends LazyLogging {
+
+  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
   def activateObject(config: Config)(p: WebDriver): WebDriver = {
     "linkedin:clear cookies" timing { p.manage().deleteAllCookies() }
 
-    "initial" timing { p.get("https://m.facebook.com") }
+    "initial" timing { Await.ready(Future(p.get("https://m.facebook.com")), 5.seconds) }
 
     val email =
-      "email" timing { new WebDriverWait(p, 15).until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("input[data-sigil='m_login_email']"))) }
+      "email" timing { Await.result(Future(new WebDriverWait(p, 15.seconds.toMillis).until(
+        ExpectedConditions.presenceOfElementLocated(By.cssSelector("input[data-sigil='m_login_email']")))), 15.seconds) }
 
     val pass =
-      "password" timing { new WebDriverWait(p, 15).until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("input[data-sigil='password-plain-text-toggle-input']"))) }
+      "password" timing { Await.result(Future(new WebDriverWait(p, 15.seconds.toMillis).until(
+        ExpectedConditions.presenceOfElementLocated(By.cssSelector("input[data-sigil='password-plain-text-toggle-input']")))),
+        15.seconds) }
 
     val loginForm = p.findElement(By.cssSelector("form[data-sigil='m_login_form']"))
 
@@ -36,6 +45,7 @@ object FacebookSeleniumDriversFactory extends LazyLogging {
   def create(config: Config): Pool[WebDriver] = {
     Pool(
       capacity = config.getInt("selenium.maxTotal"),
+      maxIdleTime = Duration(config.getDuration("selenium.idleTimeout").toMillis, TimeUnit.MILLISECONDS),
       factory = () ⇒ activateObject(config)(AbstractSeleniumDriversFactory.create(config)),
       referenceType = ReferenceType.Strong,
       reset = (p) ⇒ {
@@ -48,12 +58,13 @@ object FacebookSeleniumDriversFactory extends LazyLogging {
       },
       dispose = p ⇒ {
         try {
-          p.asInstanceOf[JBrowserDriver].quit()
+          p.asInstanceOf[JBrowserDriver].reset()
         } catch {
           case e: Throwable ⇒ logger.error("Dispose failed", e)
         }
       },
-      healthCheck = _ ⇒ false
+      healthCheck = p ⇒ p.getCurrentUrl != null // not sure about this condition, but it is the most that we can do
+                                                // based on current JBrowserDriver public API
     )
   }
 }

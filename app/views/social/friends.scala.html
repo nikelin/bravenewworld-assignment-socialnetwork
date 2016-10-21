@@ -24,8 +24,8 @@
 
                     <div>
                         <strong>Status</strong>: """ + (positionInQueue match {
-                            case SchedulerActor.PositionInQueue.ScheduledAt(position) ⇒
-                                Html(s"You are #$position in update queue")
+                            case SchedulerActor.PositionInQueue.ScheduledAt(position, timeLeft) ⇒
+                                Html(s"You are #$position in update queue (apprx. ${timeLeft.toMinutes} minutes left)")
                             case SchedulerActor.PositionInQueue.InActiveQueue ⇒
                                 Html(s"We are updating your profile right now!")
                             case SchedulerActor.PositionInQueue.NotScheduled ⇒

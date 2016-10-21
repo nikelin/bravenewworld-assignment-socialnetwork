@@ -27,7 +27,7 @@
             Html("Processing now")
         case SchedulerActor.PositionInQueue.NotScheduled ⇒
             Html("Not scheduled")
-        case SchedulerActor.PositionInQueue.ScheduledAt(position) ⇒
-            Html(s"#$position in queue")
+        case SchedulerActor.PositionInQueue.ScheduledAt(position, timeLeft) ⇒
+            Html(s"#$position in queue (${timeLeft.toMinutes}mins left)")
     })</td>
 </tr>

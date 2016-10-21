@@ -16,7 +16,7 @@ object Dependencies {
     val jWebDriverVersion = "0.17.0"
     val gson = "2.6.2"
     val commonsPool = "2.4.2"
-    val scalaPool = "0.3.0"
+    val scalaPool = "0.4.0-SNAPSHOT"
   }
 
   lazy val server = Def.setting(Seq(

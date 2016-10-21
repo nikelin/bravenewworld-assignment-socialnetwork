@@ -1,6 +1,7 @@
 package services.periodic
 
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 import akka.actor.SupervisorStrategy.Restart
@@ -42,7 +43,7 @@ object SchedulerActor {
   sealed trait PositionInQueue
   object PositionInQueue {
     case object InActiveQueue extends PositionInQueue
-    case class ScheduledAt(position: Int) extends PositionInQueue
+    case class ScheduledAt(position: Int, left: Duration) extends PositionInQueue
     case class ProcessedAt(time: Instant) extends PositionInQueue
     case object NotScheduled extends PositionInQueue
   }
@@ -59,7 +60,8 @@ object SchedulerActor {
 
 }
 
-class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialServiceConnectors,
+class SchedulerActor @Inject() (config: Config,
+                                socialServiceConnectors: SocialServiceConnectors,
                                 dataAccessManager: DataAccessManager)
   extends Actor with LazyLogging {
   import SchedulerActor._
@@ -70,6 +72,7 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
   private final val active = mutable.HashSet[Id[Person]]()
   private final val activeMap = mutable.HashMap[Id[Person], Instant]()
   private final val processed = mutable.HashMap[Id[Person], Instant]()
+  private final val processedWithin = mutable.HashMap[Id[Person], Duration]()
 
   private final val schedulerStackSize = config.getInt("scheduler.stackSize")
   private final val schedulerTimeout = config.getDuration("scheduler.processingTimeout")
@@ -94,7 +97,14 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
     if ( active.contains(person) ) PositionInQueue.InActiveQueue
     else {
       queue.zipWithIndex.find(_._1.person.id == person) match {
-        case Some(scheduledPair) ⇒ PositionInQueue.ScheduledAt(scheduledPair._2)
+        case Some(scheduledPair) ⇒ PositionInQueue.ScheduledAt(scheduledPair._2,
+          if(processedWithin.nonEmpty || activeMap.nonEmpty)
+            Duration(
+              ((processedWithin.values.map(_.toMillis).sum / (processedWithin.size + 1)) * scheduledPair._2
+              + (activeMap.map(v ⇒ Instant.now().toEpochMilli - v._2.toEpochMilli).sum / ( activeMap.size + 1))) / 2,
+              TimeUnit.MILLISECONDS)
+          else Duration.Zero
+        )
         case None ⇒
           processed.zipWithIndex.find(_._1._1 == person) match {
             case Some(processedPair) ⇒ PositionInQueue.ProcessedAt(processedPair._1._2)
@@ -126,10 +136,12 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
           active -= expired
           activeMap -= expired
           processed += expired → Instant.now
+          processedWithin(expired) = Duration(Instant.now().toEpochMilli - activeMap(expired).toEpochMilli,
+            TimeUnit.MILLISECONDS)
           expired
         }
 
-        logger.info(s"$items evicted from the active queue")
+        if ( items.nonEmpty ) logger.info(s"$items evicted from the active queue")
       }
 
     case RequestPrivate.ExecuteNetworkUpdates =>
@@ -141,9 +153,10 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
       if (queue.nonEmpty && active.size < schedulerStackSize) {
         "execute network updates" timing Future {
           val record = queue.dequeue()
+          val startedAt = Instant.now
 
           active += record.person.id
-          activeMap += record.person.id → Instant.now
+          activeMap += record.person.id → startedAt
 
           val connector = socialServiceConnectors.provideByAppId(record.person.entity.internalId.serviceType)
             .get
@@ -170,12 +183,15 @@ class SchedulerActor @Inject() (config: Config, socialServiceConnectors: SocialS
               3.minutes
             )
           } onComplete { e ⇒
+            activeMap -= record.person.id
             active -= record.person.id
+
             e match {
               case Success(_) ⇒
                 logger.info("UpdateNetwork complete")
                 processed.put(record.person.id, Instant.now())
-
+                processedWithin(record.person.id) = Duration(Instant.now().toEpochMilli - startedAt.toEpochMilli,
+                  TimeUnit.MILLISECONDS)
               case Failure(e) ⇒ logger.error("UpdateNetwork failed", e)
             }
           }
